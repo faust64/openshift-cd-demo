@@ -34,7 +34,7 @@ parameters:
   name: WEBHOOK_SECRET
   required: true
 - displayName: Integrate Quay.io
-  description: Integrate image build and deployment with Quay.io 
+  description: Integrate image build and deployment with Quay.io
   value: "false"
   name: ENABLE_QUAY
   required: true
@@ -280,19 +280,19 @@ objects:
           - /bin/bash
           - -x
           - -c
-          - |           
-            # adjust jenkins 
-            oc set resources dc/jenkins --limits=cpu=2,memory=2Gi --requests=cpu=100m,memory=512Mi 
-            oc label dc jenkins app=jenkins --overwrite 
+          - |
+            # adjust jenkins
+            oc set resources dc/jenkins --limits=cpu=1,memory=2Gi --requests=cpu=100m,memory=512Mi
+            oc label dc jenkins app=jenkins --overwrite
 
             # setup dev env
-            oc import-image wildfly --from=openshift/wildfly-120-centos7 --confirm -n ${DEV_PROJECT} 
-            
+            oc import-image wildfly --from=openshift/wildfly-120-centos7 --confirm -n ${DEV_PROJECT}
+
             if [ "${ENABLE_QUAY}" == "true" ] ; then
               # cicd
               oc create secret generic quay-cicd-secret --from-literal="username=${QUAY_USERNAME}" --from-literal="password=${QUAY_PASSWORD}" -n ${CICD_NAMESPACE}
               oc label secret quay-cicd-secret credential.sync.jenkins.openshift.io=true -n ${CICD_NAMESPACE}
-              
+
               # dev
               oc create secret docker-registry quay-cicd-secret --docker-server=quay.io --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${DEV_PROJECT}
               oc new-build --name=tasks --image-stream=wildfly:latest --binary=true --push-secret=quay-cicd-secret --to-docker --to='quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest' -n ${DEV_PROJECT}
@@ -301,7 +301,7 @@ objects:
               oc patch dc tasks -p '{"spec": {"template": {"spec": {"containers": [{"name": "tasks", "imagePullPolicy": "Always"}]}}}}' -n ${DEV_PROJECT}
               oc delete is tasks -n ${DEV_PROJECT}
               oc secrets link default quay-cicd-secret --for=pull -n ${DEV_PROJECT}
-              
+
               # stage
               oc create secret docker-registry quay-cicd-secret --docker-server=quay.io --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${STAGE_PROJECT}
               oc new-app --name=tasks --docker-image=quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --allow-missing-images -n ${STAGE_PROJECT}
@@ -314,12 +314,12 @@ objects:
               oc new-build --name=tasks --image-stream=wildfly:latest --binary=true -n ${DEV_PROJECT}
               oc new-app tasks:latest --allow-missing-images -n ${DEV_PROJECT}
               oc set triggers dc -l app=tasks --containers=tasks --from-image=tasks:latest --manual -n ${DEV_PROJECT}
-              
+
               # stage
               oc new-app tasks:stage --allow-missing-images -n ${STAGE_PROJECT}
               oc set triggers dc -l app=tasks --containers=tasks --from-image=tasks:stage --manual -n ${STAGE_PROJECT}
             fi
-            
+
             # dev project
             oc expose dc/tasks --port=8080 -n ${DEV_PROJECT}
             oc expose svc/tasks -n ${DEV_PROJECT}
@@ -338,56 +338,78 @@ objects:
             HOSTNAME=$(oc get route jenkins -o template --template='{{.spec.host}}' | sed "s/jenkins-${CICD_NAMESPACE}.//g")
             GOGS_HOSTNAME="gogs-$CICD_NAMESPACE.$HOSTNAME"
 
-            if [ "${EPHEMERAL}" == "true" ] ; then
-              oc new-app -f https://raw.githubusercontent.com/OpenShiftDemos/gogs-openshift-docker/master/openshift/gogs-template.yaml \
-                  --param=GOGS_VERSION=0.11.34 \
-                  --param=HOSTNAME=$GOGS_HOSTNAME \
-                  --param=SKIP_TLS_VERIFY=true
+            if test "${PROXY_HOST}"; then
+              PROXY=${PROXY_HOST};
+              if test "${PROXY_PORT}"; then
+                PROXY_PORT=${PROXY_PORT}
+              else
+                PROXY_PORT=3128
+              fi
+              if test "${PROXY_EXCLUDE_NAMES}"; then
+                PROXY_EXCLUDE="${PROXY_EXCLUDE_NAMES},*.${HOSTNAME}"
+              else
+                PROXY_EXCLUDE="*.${HOSTNAME}"
+              fi
+              PROXY_URL="http://$PROXY:$PROXY_PORT"
             else
-              oc new-app -f https://raw.githubusercontent.com/OpenShiftDemos/gogs-openshift-docker/master/openshift/gogs-persistent-template.yaml \
-                  --param=GOGS_VERSION=0.11.34 \
-                  --param=HOSTNAME=$GOGS_HOSTNAME \
-                  --param=SKIP_TLS_VERIFY=true
+              PROXY=""
+              PROXY_PORT=""
+              PROXY_EXCLUDE=""
+              PROXY_URL=""
             fi
-            
+            if [ "${EPHEMERAL}" == "true" ] ; then
+              oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-template.yaml \
+                  --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME \
+                  --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
+                  "--param=PROXY_PORT=$PROXY_PORT" | oc create -f-
+            else
+              oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-persistent-template.yaml \
+                  --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME \
+                  --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
+                  "--param=PROXY_PORT=$PROXY_PORT" | oc create -f-
+            fi
+
             sleep 5
 
             if [ "${EPHEMERAL}" == "true" ] ; then
-              oc new-app -f https://raw.githubusercontent.com/siamaksade/sonarqube/master/sonarqube-template.yml --param=SONARQUBE_MEMORY_LIMIT=2Gi
+              oc process -f https://raw.githubusercontent.com/faust64/sonarqube/master/sonarqube-template.yml \
+                "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$PROXY_EXCLUDE" | oc create -f-
             else
-              oc new-app -f https://raw.githubusercontent.com/siamaksade/sonarqube/master/sonarqube-persistent-template.yml --param=SONARQUBE_MEMORY_LIMIT=2Gi
+              oc process -f https://raw.githubusercontent.com/faust64/sonarqube/master/sonarqube-persistent-template.yml \
+                "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$PROXY_EXCLUDE" | oc create -f-
             fi
-
-            oc set resources dc/sonardb --limits=cpu=200m,memory=512Mi --requests=cpu=50m,memory=128Mi
-            oc set resources dc/sonarqube --limits=cpu=1,memory=2Gi --requests=cpu=50m,memory=128Mi
 
             if [ "${DEPLOY_CHE}" == "true" ] ; then
               oc process -f https://raw.githubusercontent.com/minishift/minishift/master/addons/che/templates/che-workspace-service-account.yaml \
-                  --param SERVICE_ACCOUNT_NAMESPACE=$CICD_NAMESPACE --param=SERVICE_ACCOUNT_NAME=che-workspace | oc create -f -
+                  --param SERVICE_ACCOUNT_NAMESPACE=$CICD_NAMESPACE --param=SERVICE_ACCOUNT_NAME=che-workspace | oc create -f-
 
               oc process -f https://raw.githubusercontent.com/minishift/minishift/master/addons/che/templates/che-server-template.yaml \
-                --param ROUTING_SUFFIX=$HOSTNAME \
-                --param CHE_MULTIUSER=false \
-                --param CHE_VERSION="6.19.0" \
-                --param CHE_INFRA_OPENSHIFT_PROJECT=$CICD_NAMESPACE \
+                --param ROUTING_SUFFIX=$HOSTNAME --param CHE_MULTIUSER=false \
+                --param CHE_VERSION="6.19.0" --param CHE_INFRA_OPENSHIFT_PROJECT=$CICD_NAMESPACE \
                 --param CHE_INFRA_KUBERNETES_SERVICE__ACCOUNT__NAME=che-workspace | oc create -f -
 
-              oc set resources dc/che --limits=cpu=1,memory=2Gi --requests=cpu=200m,memory=512Mi
+              oc set resources dc/che --limits=cpu=800m,memory=2Gi --requests=cpu=200m,memory=512Mi
             fi
 
             if [ "${EPHEMERAL}" == "true" ] ; then
-              oc new-app -f https://raw.githubusercontent.com/OpenShiftDemos/nexus/master/nexus3-template.yaml --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=2Gi
+              oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-template.yaml \
+                --param=NEXUS_VERSION=3.18.1 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
+                "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$PROXY_EXCLUDE" | oc create -f-
             else
-              oc new-app -f https://raw.githubusercontent.com/OpenShiftDemos/nexus/master/nexus3-persistent-template.yaml --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=2Gi
+              oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-persistent-template.yaml \
+                --param=NEXUS_VERSION=3.18.1 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
+                "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$PROXY_EXCLUDE" | oc create -f-
             fi
-
-            oc set resources dc/nexus --requests=cpu=200m --limits=cpu=2
 
             GOGS_SVC=$(oc get svc gogs -o template --template='{{.spec.clusterIP}}')
             GOGS_USER=gogs
             GOGS_PWD=gogs
 
-            oc rollout status dc gogs
+            while ! curl http://$GOG_VC:3000/ >/dev/null 2>&1
+            do
+              echo waiting for gogs to start
+              sleep 5
+            done
 
             _RETURN=$(curl -o /tmp/curl.log -sL --post302 -w "%{http_code}" http://$GOGS_SVC:3000/user/sign_up \
               --form user_name=$GOGS_USER \
@@ -397,7 +419,7 @@ objects:
 
             sleep 5
 
-            if [ $_RETURN != "200" ] && [ $_RETURN != "302" ] ; then
+            if test $_RETURN != "200" -a $_RETURN != "302"; then
               echo "ERROR: Failed to create Gogs admin"
               cat /tmp/curl.log
               exit 255
@@ -405,7 +427,7 @@ objects:
 
             sleep 10
 
-            cat <<EOF > /tmp/data.json
+            cat <<EOF >/tmp/data.json
             {
               "clone_addr": "https://github.com/OpenShiftDemos/openshift-tasks.git",
               "uid": 1,
@@ -414,9 +436,9 @@ objects:
             EOF
 
             _RETURN=$(curl -o /tmp/curl.log -sL -w "%{http_code}" -H "Content-Type: application/json" \
-            -u $GOGS_USER:$GOGS_PWD -X POST http://$GOGS_SVC:3000/api/v1/repos/migrate -d @/tmp/data.json)
+              -u $GOGS_USER:$GOGS_PWD -X POST http://$GOGS_SVC:3000/api/v1/repos/migrate -d @/tmp/data.json)
 
-            if [ $_RETURN != "201" ] ;then
+            if test $_RETURN != "201"; then
               echo "ERROR: Failed to import openshift-tasks GitHub repo"
               cat /tmp/curl.log
               exit 255
@@ -424,7 +446,7 @@ objects:
 
             sleep 5
 
-            cat <<EOF > /tmp/data.json
+            cat <<EOF >/tmp/data.json
             {
               "type": "gogs",
               "config": {
@@ -439,16 +461,13 @@ objects:
             EOF
 
             _RETURN=$(curl -o /tmp/curl.log -sL -w "%{http_code}" -H "Content-Type: application/json" \
-            -u $GOGS_USER:$GOGS_PWD -X POST http://$GOGS_SVC:3000/api/v1/repos/gogs/openshift-tasks/hooks -d @/tmp/data.json)
+              -u $GOGS_USER:$GOGS_PWD -X POST http://$GOGS_SVC:3000/api/v1/repos/gogs/openshift-tasks/hooks -d @/tmp/data.json)
 
-            if [ $_RETURN != "201" ] ; then
+            if test $_RETURN != "201"; then
               echo "ERROR: Failed to set webhook"
               cat /tmp/curl.log
               exit 255
             fi
           image: quay.io/openshift/origin-cli:v4.0
           name: cicd-demo-installer-job
-          resources: {}
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
         restartPolicy: Never
