@@ -10,6 +10,10 @@ metadata:
   name: cicd
 message: "Use the following credentials for login:\nJenkins: use your OpenShift credentials\nNexus: admin/admin123\nSonarQube: admin/admin\nGogs Git Server: gogs/gogs"
 parameters:
+- name: PROXY_HOST
+- name: PROXY_PORT
+- name: PROXY_EXCLUDE_NAMES
+  value: .cluster.local,.svc
 - displayName: DEV project name
   value: dev
   name: DEV_PROJECT
@@ -276,6 +280,18 @@ objects:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: HTTP_PROXY
+            value: http://${PROXY_HOST}:${PROXY_PORT}/
+          - name: HTTPS_PROXY
+            value: http://${PROXY_HOST}:${PROXY_PORT}/
+          - name: NO_PROXY
+            value: ${PROXY_EXCLUDE_NAMES}
+          - name: http_proxy
+            value: http://${PROXY_HOST}:${PROXY_PORT}/
+          - name: https_proxy
+            value: http://${PROXY_HOST}:${PROXY_PORT}/
+          - name: no_proxy
+            value: ${PROXY_EXCLUDE_NAMES}
           command:
           - /bin/bash
           - -x
