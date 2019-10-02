@@ -577,16 +577,16 @@ objects:
                 --param CHE_VERSION="6.19.0" --param CHE_INFRA_OPENSHIFT_PROJECT=$CICD_NAMESPACE \
                 --param CHE_INFRA_KUBERNETES_SERVICE__ACCOUNT__NAME=che-workspace | oc create -f -
 
-              oc set resources dc/che --limits=cpu=800m,memory=2Gi --requests=cpu=200m,memory=512Mi
+              oc set resources deployment/che --limits=cpu=800m,memory=2Gi --requests=cpu=200m,memory=512Mi
             fi
 
             if [ "${EPHEMERAL}" == "true" ] ; then
               oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-template.yaml \
-                --param=NEXUS_VERSION=3.18.1 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
+                --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-persistent-template.yaml \
-                --param=NEXUS_VERSION=3.18.1 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
+                --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             fi
 
