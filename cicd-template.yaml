@@ -584,6 +584,7 @@ objects:
                 --param CHE_INFRA_KUBERNETES_SERVICE__ACCOUNT__NAME=che-workspace | oc create -f -
 
               oc set resources deployment/che --limits=cpu=800m,memory=2Gi --requests=cpu=200m,memory=512Mi
+              oc patch route che --patch '{"spec":{"tls":{"insecureEdgeTerminationPolicy":"Redirect","termination":"edge"}}}'
             fi
 
             if test "${DEPLOY_CLAIR}" = true; then
@@ -605,6 +606,7 @@ objects:
                 --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             fi
+            oc patch route nexus --patch '{"spec":{"tls":{"insecureEdgeTerminationPolicy":"Redirect","termination":"edge"}}}'
 
             GOGS_SVC=$(oc get svc gogs -o template --template='{{.spec.clusterIP}}')
             GOGS_USER=gogs
