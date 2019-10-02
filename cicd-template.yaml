@@ -131,6 +131,9 @@ objects:
             value: jenkins-jnlp
           - name: TZ
             value: Europe/Paris
+# wwwwtf?!
+          - name: PATH
+            value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-11-openjdk-11.0.4.11-1.el7_7.x86_64/bin
           - name: JAVA_GC_OPTS
             value: -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ParallelRefProcEnabled -XX:+ExplicitGCInvokesConcurrent -XX:+UnlockDiagnosticVMOptions -XX:G1SummarizeRSetStatsPeriod=1 -XX:MaxMetaspaceExpansion=64M -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20
           image: ' '
