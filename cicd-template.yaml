@@ -474,6 +474,10 @@ objects:
           - -x
           - -c
           - |
+            if test -z "${PROXY_HOST}"; then
+                unset HTTP_PROXY HTTPS_PROXY NO_POXY http_proxy https_proxy no_poxy
+            fi
+
             # setup dev env
             oc import-image wildfly --from=openshift/wildfly-120-centos7 --confirm -n ${DEV_PROJECT}
 
