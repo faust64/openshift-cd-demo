@@ -420,8 +420,10 @@ objects:
             GOGS_SVC=$(oc get svc gogs -o template --template='{{.spec.clusterIP}}')
             GOGS_USER=gogs
             GOGS_PWD=gogs
+            export NO_PROXY=${PROXY_EXCLUDE},$GOGS_SVC
+            export no_proxy=${PROXY_EXCLUDE},$GOGS_SVC
 
-            while ! curl http://$GOG_VC:3000/ >/dev/null 2>&1
+            while ! curl http://$GOGS_SVC:3000/ >/dev/null 2>&1
             do
               echo waiting for gogs to start
               sleep 5
