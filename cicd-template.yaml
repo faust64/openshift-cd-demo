@@ -1,63 +1,18 @@
 apiVersion: v1
 kind: Template
 labels:
-  template: cicd
   group: cicd
+message: |-
+  Use the following credentials for login:
+      Jenkins: use your OpenShift credentials
+      Nexus: admin/admin123
+      SonarQube: admin/admin
+      Gogs Git Server: gogs/gogs"
 metadata:
   annotations:
     iconClass: icon-jenkins
-    tags: instant-app,jenkins,gogs,nexus,cicd
+    tags: instant-app,jenkins,gogs,nexus,sonarqube,clair,cicd
   name: cicd
-message: "Use the following credentials for login:\nJenkins: use your OpenShift credentials\nNexus: admin/admin123\nSonarQube: admin/admin\nGogs Git Server: gogs/gogs"
-parameters:
-- name: PROXY_HOST
-- name: PROXY_PORT
-- name: PROXY_EXCLUDE_NAMES
-  value: .cluster.local,.svc
-- displayName: DEV project name
-  value: dev
-  name: DEV_PROJECT
-  required: true
-- displayName: STAGE project name
-  value: stage
-  name: STAGE_PROJECT
-  required: true
-- displayName: Deploy CoreOS Clair
-  description: Deploy CoreOS Clair scanning Docker images as part of CI pipelines
-  value: "false"
-  name: DEPLOY_CLAIR
-  required: true
-- displayName: Deploy Eclipse Che
-  description: Deploy Eclipse Che in order to use as an online IDE for changing code in this demo
-  value: "false"
-  name: DEPLOY_CHE
-  required: true
-- displayName: Ephemeral
-  description: Use no persistent storage for Gogs and Nexus
-  value: "true"
-  name: EPHEMERAL
-  required: true
-- description: Webhook secret
-  from: '[a-zA-Z0-9]{8}'
-  generate: expression
-  name: WEBHOOK_SECRET
-  required: true
-- displayName: Integrate Quay.io
-  description: Integrate image build and deployment with Quay.io
-  value: "false"
-  name: ENABLE_QUAY
-  required: true
-- displayName: Quay.io Username
-  description: Quay.io username to push the images to tasks-sample-app repository on your Quay.io account
-  name: QUAY_USERNAME
-- displayName: Quay.io Password
-  description: Quay.io password to push the images to tasks-sample-app repository on your Quay.io account
-  name: QUAY_PASSWORD
-- displayName: Quay.io Image Repository
-  description: Quay.io repository for pushing Tasks container images
-  name: QUAY_REPOSITORY
-  required: true
-  value: tasks-app
 objects:
 - apiVersion: v1
   groupNames: null
@@ -125,7 +80,7 @@ objects:
           - name: DISABLE_ADMINISTRATIVE_MONITORS
             value: "false"
           - name: INSTALL_PLUGINS
-            value: sonar,gitlab-hook,generic-webhook-trigger,gogs-webhook,pipeline-npm,gitlab,nexus-artifact-uploader,kubernetes-credentials-provider,http_request,accelerated-build-now-plugin,active-directory,analysis-core,ant,antisamy-markup-formatter,artifactdeployer,build-failure-analyzer,build-name-setter,conditional-buildstep,configurationslicing,custom-tools-plugin,cvs,description-setter,disk-usage,docker-plugin,docker-slaves,durable-task,elastic-axis,email-ext,envinject,external-monitor-job,gerrit-trigger,git-parameter,groovy-label-assignment,PrioritySorter,postbuild-task,jobConfigHistory,leastload,mapdb-api,monitoring,mask-passwords,periodic-reincarnation,plot,preSCMbuildstep,project-stats-plugin,purge-build-queue-plugin,release,repo,slave-setup,slave-status,ssh-agent,throttle-concurrents,timestamper,translation,warnings
+            value: ${JENKINS_PLUGINS}
           - name: KUBERNETES_MASTER
             value: https://kubernetes.default:443
           - name: KUBERNETES_TRUST_CERTIFICATES
@@ -134,11 +89,10 @@ objects:
             value: jenkins
           - name: JNLP_SERVICE_NAME
             value: jenkins-jnlp
-          - name: TZ
-            value: Europe/Paris
 # wwwwtf?!
           - name: PATH
             value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-11-openjdk-11.0.4.11-1.el7_7.x86_64/bin
+# ^ shouldn't be needed & likely to break over time. quick fix for an issue in a very specific scenario
           - name: JAVA_GC_OPTS
             value: -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ParallelRefProcEnabled -XX:+ExplicitGCInvokesConcurrent -XX:+UnlockDiagnosticVMOptions -XX:G1SummarizeRSetStatsPeriod=1 -XX:MaxMetaspaceExpansion=64M -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20
           image: ' '
@@ -275,7 +229,9 @@ objects:
         - name: STAGE_PROJECT
           value: ${STAGE_PROJECT}
         - name: ENABLE_QUAY
-          value: ${ENABLE_QUAY}
+          value: "${ENABLE_QUAY}"
+        - name: DEPLOY_CIAIR
+          value: "${DEPLOY_CIAIR}"
         jenkinsfile: |-
           def mvnCmd = "mvn -s configuration/cicd-settings-nexus3.xml"
 
@@ -315,6 +271,11 @@ objects:
                     openshift.withCluster() {
                       openshift.withProject(env.DEV_PROJECT) {
                         openshift.selector("bc", "tasks").startBuild("--from-file=target/ROOT.war", "--wait=true")
+                      }
+                      if (env.DEPLOY_CLAIR.toBoolean()) {
+                          // start scan job / separate container
+                          // maybe use separate pipeline and wait for its completion?
+                          echo "TODO"
                       }
                     }
                   }
@@ -627,15 +588,15 @@ objects:
 
             if test "${DEPLOY_CLAIR}" = true; then
               if test "${EPHEMERAL}" = true; then
-                oc process -f https://raw.githubusercontent.com/faust64/openshift-coreos-clair/master/clair-ephemeral.yml \
+                oc process -f https://raw.githubusercontent.com/faust64/openshift-coreos-clair/master/clair-ephemeral.yaml \
                   "--param=HTTP_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
               else
-                oc process -f https://raw.githubusercontent.com/faust64/openshift-coreos-clair/master/clair-persistent.yml \
+                oc process -f https://raw.githubusercontent.com/faust64/openshift-coreos-clair/master/clair-persistent.yaml \
                   "--param=HTTP_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
               fi
             fi
 
-            if test "${EPHEMERAL}" = "true; then
+            if test "${EPHEMERAL}" = true; then
               oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-template.yaml \
                 --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
@@ -657,13 +618,18 @@ objects:
               sleep 5
             done
 
-            sleep 20
+            for retry in one too tri
+            do
+              _RETURN=$(curl -o /tmp/curl.log -sL --post302 -w "%{http_code}" http://$GOGS_SVC:3000/user/sign_up \
+                --form user_name=$GOGS_USER --form password=$GOGS_PWD \
+                --form retype=$GOGS_PWD --form email=admin@gogs.com)
 
-            _RETURN=$(curl -o /tmp/curl.log -sL --post302 -w "%{http_code}" http://$GOGS_SVC:3000/user/sign_up \
-              --form user_name=$GOGS_USER --form password=$GOGS_PWD \
-              --form retype=$GOGS_PWD --form email=admin@gogs.com)
-
-            sleep 5
+              if test $_RETURN = "200" -o $_RETURN = "302"; then
+                break
+              elif ! test "$retry" = tri; then
+                sleep 5
+              fi
+            done
 
             if test $_RETURN != "200" -a $_RETURN != "302"; then
               echo "ERROR: Failed to create Gogs admin"
@@ -717,3 +683,57 @@ objects:
           image: openshift/origin:v3.11
           name: cicd-demo-installer-job
         restartPolicy: Never
+parameters:
+- name: PROXY_HOST
+- name: PROXY_PORT
+- name: PROXY_EXCLUDE_NAMES
+  value: .cluster.local,.svc
+- displayName: DEV project name
+  value: dev
+  name: DEV_PROJECT
+  required: true
+- displayName: STAGE project name
+  value: stage
+  name: STAGE_PROJECT
+  required: true
+- displayName: Deploy CoreOS Clair
+  description: Deploy CoreOS Clair scanning Docker images as part of CI pipelines
+  value: "true"
+  name: DEPLOY_CLAIR
+  required: true
+- displayName: Deploy Eclipse Che
+  description: Deploy Eclipse Che in order to use as an online IDE for changing code in this demo
+  value: "false"
+  name: DEPLOY_CHE
+  required: true
+- displayName: Ephemeral
+  description: Use no persistent storage for Gogs, Nexus, SonarQube and CoreOS Clair (demo)
+  value: "false"
+  name: EPHEMERAL
+  required: true
+- displayName: Jenkins Plugins List
+  description: List of Jenkins Plugins to load during startup
+  value: sonar,gitlab-hook,generic-webhook-trigger,gogs-webhook,pipeline-npm,gitlab,nexus-artifact-uploader,kubernetes-credentials-provider,http_request,accelerated-build-now-plugin,active-directory,analysis-core,ant,antisamy-markup-formatter,artifactdeployer,build-failure-analyzer,build-name-setter,conditional-buildstep,configurationslicing,custom-tools-plugin,cvs,description-setter,disk-usage,docker-plugin,docker-slaves,durable-task,elastic-axis,email-ext,envinject,external-monitor-job,gerrit-trigger,git-parameter,groovy-label-assignment,PrioritySorter,postbuild-task,jobConfigHistory,leastload,mapdb-api,monitoring,mask-passwords,periodic-reincarnation,plot,preSCMbuildstep,project-stats-plugin,purge-build-queue-plugin,release,repo,slave-setup,slave-status,ssh-agent,throttle-concurrents,timestamper,translation,warnings
+  name: JENKINS_PLUGINS
+  required: true
+- description: Webhook secret
+  from: '[a-zA-Z0-9]{8}'
+  generate: expression
+  name: WEBHOOK_SECRET
+  required: true
+- displayName: Integrate Quay.io
+  description: Integrate image build and deployment with Quay.io
+  value: "false"
+  name: ENABLE_QUAY
+  required: true
+- displayName: Quay.io Username
+  description: Quay.io username to push the images to tasks-sample-app repository on your Quay.io account
+  name: QUAY_USERNAME
+- displayName: Quay.io Password
+  description: Quay.io password to push the images to tasks-sample-app repository on your Quay.io account
+  name: QUAY_PASSWORD
+- displayName: Quay.io Image Repository
+  description: Quay.io repository for pushing Tasks container images
+  name: QUAY_REPOSITORY
+  required: true
+  value: tasks-app
