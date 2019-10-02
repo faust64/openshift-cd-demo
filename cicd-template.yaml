@@ -64,6 +64,180 @@ objects:
   subjects:
   - kind: ServiceAccount
     name: default
+# Jenkins
+- apiVersion: v1
+  kind: Route
+  metadata:
+    annotations:
+      haproxy.router.openshift.io/timeout: 4m
+      template.openshift.io/expose-uri: http://{.spec.host}{.spec.path}
+    name: jenkins
+  spec:
+    tls:
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+    to:
+      kind: Service
+      name: jenkins
+- apiVersion: v1
+  data:
+    proxy.xml: |-
+      <?xml version='1.0' encoding='UTF-8'?>
+      <proxy>
+        <name>${PROXY_HOST}</name>
+        <port>${PROXY_PORT}</port>
+        <noProxyHost>*.svc.cluster.local
+      *.local</noProxyHost>
+        <secretPassword></secretPassword>
+        <testUrl>http://github.com</testUrl>
+      </proxy>
+  kind: ConfigMap
+  metadata:
+    name: ${JENKINS_SERVICE_NAME}-conf
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    name: jenkins
+  spec:
+    replicas: 1
+    selector:
+      name: jenkins
+    strategy:
+      recreateParams:
+        timeoutSeconds: 900
+      type: Recreate
+    template:
+      metadata:
+        labels:
+          name: jenkins
+      spec:
+        containers:
+        - env:
+          - name: OPENSHIFT_ENABLE_OAUTH
+            value: "true"
+          - name: OPENSHIFT_ENABLE_REDIRECT_PROMPT
+            value: "true"
+          - name: DISABLE_ADMINISTRATIVE_MONITORS
+            value: "false"
+          - name: INSTALL_PLUGINS
+            value: sonar,gitlab-hook,generic-webhook-trigger,gogs-webhook,pipeline-npm,gitlab,nexus-artifact-uploader,kubernetes-credentials-provider,http_request,accelerated-build-now-plugin,active-directory,analysis-core,ant,antisamy-markup-formatter,artifactdeployer,build-failure-analyzer,build-name-setter,conditional-buildstep,configurationslicing,custom-tools-plugin,cvs,description-setter,disk-usage,docker-plugin,docker-slaves,durable-task,elastic-axis,email-ext,envinject,external-monitor-job,gerrit-trigger,git-parameter,groovy-label-assignment,PrioritySorter,postbuild-task,jobConfigHistory,leastload,mapdb-api,monitoring,mask-passwords,periodic-reincarnation,plot,preSCMbuildstep,project-stats-plugin,purge-build-queue-plugin,release,repo,slave-setup,slave-status,ssh-agent,throttle-concurrents,timestamper,translation,warnings
+          - name: KUBERNETES_MASTER
+            value: https://kubernetes.default:443
+          - name: KUBERNETES_TRUST_CERTIFICATES
+            value: "true"
+          - name: JENKINS_SERVICE_NAME
+            value: jenkins
+          - name: JNLP_SERVICE_NAME
+            value: jenkins-jnlp
+          - name: TZ
+            value: Europe/Paris
+          - name: JAVA_GC_OPTS
+            value: -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ParallelRefProcEnabled -XX:+ExplicitGCInvokesConcurrent -XX:+UnlockDiagnosticVMOptions -XX:G1SummarizeRSetStatsPeriod=1 -XX:MaxMetaspaceExpansion=64M -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20
+          image: ' '
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 20
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+          name: jenkins
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 10
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              cpu: 500m
+              memory: 3Gi
+          volumeMounts:
+          - mountPath: /var/lib/jenkins
+            name: data
+          - mountPath: /var/lib/jenkins/caches
+            name: cache
+          - mountPath: /var/lib/jenkins/proxy.xml
+            name: conf
+            subPath: proxy.xml
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        serviceAccountName: jenkins
+        volumes:
+        - emptyDir: {}
+          name: data
+        - emptyDir: {}
+          name: cache
+        - configMap:
+            defaultMode: 420
+            name: jenkins-conf
+          name: conf
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - jenkins
+        from:
+          kind: ImageStreamTag
+          name: jenkins:latest
+          namespace: openshift
+      type: ImageChange
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    annotations:
+      serviceaccounts.openshift.io/oauth-redirectreference.jenkins: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"jenkins"}}'
+    name: jenkins
+- apiVersion: v1
+  groupNames: null
+  kind: RoleBinding
+  metadata:
+    name: jenkins_edit
+  roleRef:
+    name: edit
+  subjects:
+  - kind: ServiceAccount
+    name: jenkins
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: jenkins-jnlp
+  spec:
+    ports:
+    - name: agent
+      nodePort: 0
+      port: 50000
+      protocol: TCP
+      targetPort: 50000
+    selector:
+      name: jenkins
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      service.alpha.openshift.io/dependencies: '[{"name": "jenkins-jnlp", "namespace": "", "kind": "Service"}]'
+      service.openshift.io/infrastructure: "true"
+    name: jenkins
+  spec:
+    ports:
+    - name: web
+      nodePort: 0
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      name: ${JENKINS_SERVICE_NAME}
+    sessionAffinity: None
+    type: ClusterIP
 # Pipeline
 - apiVersion: v1
   kind: BuildConfig
@@ -297,10 +471,6 @@ objects:
           - -x
           - -c
           - |
-            # adjust jenkins
-            oc set resources dc/jenkins --limits=cpu=1,memory=2Gi --requests=cpu=100m,memory=512Mi
-            oc label dc jenkins app=jenkins --overwrite
-
             # setup dev env
             oc import-image wildfly --from=openshift/wildfly-120-centos7 --confirm -n ${DEV_PROJECT}
 
@@ -355,22 +525,22 @@ objects:
             GOGS_HOSTNAME="gogs-$CICD_NAMESPACE.$HOSTNAME"
 
             if test "${PROXY_HOST}"; then
-              PROXY=${PROXY_HOST};
+              PROXY=${PROXY_HOST}
               if test "${PROXY_PORT}"; then
                 PROXY_PORT=${PROXY_PORT}
               else
                 PROXY_PORT=3128
               fi
-              if test "${PROXY_EXCLUDE_NAMES}"; then
-                PROXY_EXCLUDE="${PROXY_EXCLUDE_NAMES},*.${HOSTNAME}"
+              if test "$NO_PROXY"; then
+                NO_PROXY="$NO_PROXY,*.${HOSTNAME}"
               else
-                PROXY_EXCLUDE="*.${HOSTNAME}"
+                NO_PROXY="*.${HOSTNAME}"
               fi
               PROXY_URL="http://$PROXY:$PROXY_PORT"
             else
               PROXY=""
               PROXY_PORT=""
-              PROXY_EXCLUDE=""
+              NO_PROXY=""
               PROXY_URL=""
             fi
             if [ "${EPHEMERAL}" == "true" ] ; then
@@ -389,10 +559,10 @@ objects:
 
             if [ "${EPHEMERAL}" == "true" ] ; then
               oc process -f https://raw.githubusercontent.com/faust64/sonarqube/master/sonarqube-template.yml \
-                "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$PROXY_EXCLUDE" | oc create -f-
+                "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/faust64/sonarqube/master/sonarqube-persistent-template.yml \
-                "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$PROXY_EXCLUDE" | oc create -f-
+                "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$NO_PROXY" | oc create -f-
             fi
 
             if [ "${DEPLOY_CHE}" == "true" ] ; then
@@ -410,18 +580,18 @@ objects:
             if [ "${EPHEMERAL}" == "true" ] ; then
               oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-template.yaml \
                 --param=NEXUS_VERSION=3.18.1 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
-                "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$PROXY_EXCLUDE" | oc create -f-
+                "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-persistent-template.yaml \
                 --param=NEXUS_VERSION=3.18.1 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
-                "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$PROXY_EXCLUDE" | oc create -f-
+                "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             fi
 
             GOGS_SVC=$(oc get svc gogs -o template --template='{{.spec.clusterIP}}')
             GOGS_USER=gogs
             GOGS_PWD=gogs
-            export NO_PROXY=${PROXY_EXCLUDE},$GOGS_SVC
-            export no_proxy=${PROXY_EXCLUDE},$GOGS_SVC
+            export NO_PROXY=$NO_PROXY,$GOGS_SVC
+            export no_proxy=$NO_PROXY
 
             while ! curl http://$GOGS_SVC:3000/ >/dev/null 2>&1
             do
