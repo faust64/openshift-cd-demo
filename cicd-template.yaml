@@ -93,7 +93,7 @@ objects:
       </proxy>
   kind: ConfigMap
   metadata:
-    name: ${JENKINS_SERVICE_NAME}-conf
+    name: jenkins-conf
 - apiVersion: v1
   kind: DeploymentConfig
   metadata:
@@ -235,7 +235,7 @@ objects:
       protocol: TCP
       targetPort: 8080
     selector:
-      name: ${JENKINS_SERVICE_NAME}
+      name: jenkins
     sessionAffinity: None
     type: ClusterIP
 # Pipeline
