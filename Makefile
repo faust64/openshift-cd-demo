@@ -55,6 +55,7 @@ reset:
 	    dc/nexus pvc/nexus-pv svc/nexus routes/nexus is/nexus \
 	    route/jenkins cm/jenkins-conf dc/jenkins svc/jenkins-jnlp svc/jenkins \
 	    sa/jenkins rolebinding/jenkins_edit cm/jenkins-slaves pvc/jenkins-data \
+	    bc/jenkins-agent-klar is/jenkins-agent-klar is/jenkins \
 	    dc/sonarqube pvc/sonardb routes/sonarqube svc/sonarqube is/sonarqube cm/sonarqube \
 	    dc/sonardb pvc/sonarqube-data secret/sonardb secret/sonar-ldap-bind-dn svc/sonardb \
 	    dc/clair-postgres secret/clair-postgres pvc/clair-postgres svc/clair-postgres \
