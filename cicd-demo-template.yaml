@@ -61,15 +61,6 @@ objects:
   metadata:
     name: jenkins-conf
 - apiVersion: v1
-  kind: PersistentVolumeClaim
-  metadata:
-    name: jenkins-data
-  spec:
-    accessModes: [ ReadWriteOnce ]
-    resources:
-      requests:
-        storage: ${JENKINS_VOLUME_CAPACITY}
-- apiVersion: v1
   kind: DeploymentConfig
   metadata:
     name: jenkins
@@ -143,9 +134,8 @@ objects:
         restartPolicy: Always
         serviceAccountName: jenkins
         volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: jenkins-data
+        - emptyDir: {}
+          name: data
         - emptyDir: {}
           name: cache
         - configMap:
@@ -698,9 +688,7 @@ objects:
                 "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/faust64/sonarqube/master/sonarqube-persistent-template.yml \
-                "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$NO_PROXY" \
-                "--param=POSTGRES_PERSISTENT_VOLUME_CLAIM_SIZE=${SONARQUBE_DB_VOLUME_CAPACITY}" \
-                "--param=SONARQUBE_PERSISTENT_VOLUME_SIZE=${SONARQUBE_APP_VOLUME_CAPACITY}" | oc create -f-
+                "--param=PROXY_HOST=$PROXY" "--param=PROXY_PORT=$POXY_PORT" "--param=PROXY_EXCLUDE=$NO_PROXY" | oc create -f-
             fi
 
             if test "${DEPLOY_CHE}" = true; then
@@ -724,18 +712,17 @@ objects:
                   "--param=HTTP_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
               else
                 oc process -f https://raw.githubusercontent.com/faust64/openshift-coreos-clair/master/clair-persistent.yaml \
-                  "--param=HTTP_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" \
-                  "--param=CLAIR_DB_VOLUME_CAPACITY=${CLAIR_POSTGRES_VOLUME_CAPACITY}" | oc create -f-
+                  "--param=HTTP_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
               fi
             fi
 
             if test "${EPHEMERAL}" = true; then
               oc process -f https://raw.githubusercontent.com/faust64/nexus/master/nexus3-template.yaml \
-                --param=NEXUS_VERSION=3.13.0 "--param=HTTP_PROXY=$PROXY_URL" \
+                --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/faust64/nexus/master/nexus3-persistent-template.yaml \
-                --param=NEXUS_VERSION=3.13.0 "--param=HTTP_PROXY=$PROXY_URL" "--param=VOLUME_CAPACITY=${NEXUS_VOLUME_CAPACITY}" \
+                --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             fi
 
@@ -819,10 +806,6 @@ objects:
           name: cicd-demo-installer-job
         restartPolicy: Never
 parameters:
-- displayName: Clair Database Persistent Volume Size
-  name: CLAIR_DB_VOLUME_CAPACITY
-  required: true
-  value: 10Gi
 - displayName: DEV project name
   name: DEV_PROJECT
   required: true
@@ -831,7 +814,7 @@ parameters:
   displayName: Deploy CoreOS Clair
   name: DEPLOY_CLAIR
   required: true
-  value: "true"
+  value: "false"
 - description: Deploy Eclipse Che in order to use as an online IDE for changing code in this demo
   displayName: Deploy Eclipse Che
   name: DEPLOY_CHE
@@ -846,7 +829,7 @@ parameters:
   displayName: Ephemeral
   name: EPHEMERAL
   required: true
-  value: "false"
+  value: "true"
 - displayName: Jenkins Image Source
   name: JENKINS_IMAGE_SOURCE
   required: true
@@ -860,14 +843,6 @@ parameters:
   name: JENKINS_PLUGINS
   required: true
   value: sonar,gitlab-hook,generic-webhook-trigger,gogs-webhook,pipeline-npm,gitlab,nexus-artifact-uploader,kubernetes-credentials-provider,http_request,accelerated-build-now-plugin,active-directory,analysis-core,ant,antisamy-markup-formatter,artifactdeployer,build-failure-analyzer,build-name-setter,conditional-buildstep,configurationslicing,custom-tools-plugin,cvs,description-setter,disk-usage,docker-plugin,docker-slaves,durable-task,elastic-axis,email-ext,envinject,external-monitor-job,gerrit-trigger,git-parameter,groovy-label-assignment,PrioritySorter,postbuild-task,jobConfigHistory,leastload,mapdb-api,monitoring,mask-passwords,periodic-reincarnation,plot,preSCMbuildstep,project-stats-plugin,purge-build-queue-plugin,release,repo,slave-setup,slave-status,ssh-agent,throttle-concurrents,timestamper,translation,warnings
-- displayName: Jenkins Persistent Volume Size
-  name: JENKINS_VOLUME_CAPACITY
-  required: true
-  value: 10Gi
-- displayName: Nexus Persistent Volume Size
-  name: NEXUS_VOLUME_CAPACITY
-  required: true
-  value: 10Gi
 - displayName: OpenShift Image Tag
   name: OPENSHIFT_IMAGE_TAG
   required: true
@@ -892,14 +867,6 @@ parameters:
 - description: Quay.io username to push the images to tasks-sample-app repository on your Quay.io account
   displayName: Quay.io Username
   name: QUAY_USERNAME
-- displayName: Sonarqube Application Persistent Volume Size
-  name: SONARQUBE_APP_VOLUME_CAPACITY
-  required: true
-  value: 10Gi
-- displayName: Sonarqube Database Persistent Volume Size
-  name: SONARQUBE_DB_VOLUME_CAPACITY
-  required: true
-  value: 10Gi
 - displayName: STAGE project name
   name: STAGE_PROJECT
   required: true

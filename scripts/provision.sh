@@ -19,7 +19,7 @@ function usage() {
     echo "   delete                   Clean up and remove demo projects and objects"
     echo "   idle                     Make all demo services idle"
     echo "   unidle                   Make all demo services unidle"
-    echo 
+    echo
     echo "OPTIONS:"
     echo "   --enable-quay              Optional    Enable integration of build and deployments with quay.io"
     echo "   --quay-username            Optional    quay.io username to push the images to a quay.io account. Required if --enable-quay is set"
@@ -38,6 +38,7 @@ ARG_COMMAND=
 ARG_EPHEMERAL=false
 ARG_OC_OPS=
 ARG_DEPLOY_CHE=false
+ARG_DEPLOY_CLAIR=false
 ARG_ENABLE_QUAY=false
 ARG_QUAY_USER=
 ARG_QUAY_PASS=
@@ -112,6 +113,9 @@ while :; do
         --ephemeral)
             ARG_EPHEMERAL=true
             ;;
+        --enable-clair|--deploy-clair)
+            ARG_DEPLOY_CLAIR=true
+            ;;
         --enable-che|--deploy-che)
             ARG_DEPLOY_CHE=true
             ;;
@@ -142,7 +146,7 @@ done
 LOGGEDIN_USER=$(oc $ARG_OC_OPS whoami)
 OPENSHIFT_USER=${ARG_USERNAME:-$LOGGEDIN_USER}
 PRJ_SUFFIX=${ARG_PROJECT_SUFFIX:-`echo $OPENSHIFT_USER | sed -e 's/[-@].*//g'`}
-GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-siamaksade}
+GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-faust64}
 GITHUB_REF=${GITHUB_REF:-ocp-3.11}
 
 function deploy() {
@@ -159,7 +163,7 @@ function deploy() {
     oc $ARG_OC_OPS adm policy add-role-to-user admin $ARG_USERNAME -n dev-$PRJ_SUFFIX >/dev/null 2>&1
     oc $ARG_OC_OPS adm policy add-role-to-user admin $ARG_USERNAME -n stage-$PRJ_SUFFIX >/dev/null 2>&1
     oc $ARG_OC_OPS adm policy add-role-to-user admin $ARG_USERNAME -n cicd-$PRJ_SUFFIX >/dev/null 2>&1
-    
+
     oc $ARG_OC_OPS annotate --overwrite namespace dev-$PRJ_SUFFIX   demo=openshift-cd-$PRJ_SUFFIX >/dev/null 2>&1
     oc $ARG_OC_OPS annotate --overwrite namespace stage-$PRJ_SUFFIX demo=openshift-cd-$PRJ_SUFFIX >/dev/null 2>&1
     oc $ARG_OC_OPS annotate --overwrite namespace cicd-$PRJ_SUFFIX  demo=openshift-cd-$PRJ_SUFFIX >/dev/null 2>&1
@@ -175,7 +179,7 @@ function deploy() {
 
   local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template.yaml
   echo "Using template $template"
-  oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p DEPLOY_CHE=$ARG_DEPLOY_CHE -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_QUAY=$ARG_ENABLE_QUAY -p QUAY_USERNAME=$ARG_QUAY_USER -p QUAY_PASSWORD=$ARG_QUAY_PASS -n cicd-$PRJ_SUFFIX 
+  oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p DEPLOY_CLAIR=$ARG_DEPLOY_CLAIR -p DEPLOY_CHE=$ARG_DEPLOY_CHE -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_QUAY=$ARG_ENABLE_QUAY -p QUAY_USERNAME=$ARG_QUAY_USER -p QUAY_PASSWORD=$ARG_QUAY_PASS -n cicd-$PRJ_SUFFIX
 }
 
 function make_idle() {
@@ -250,7 +254,7 @@ case "$ARG_COMMAND" in
         echo
         echo "Delete completed successfully!"
         ;;
-      
+
     idle)
         echo "Idling demo..."
         make_idle
@@ -271,7 +275,7 @@ case "$ARG_COMMAND" in
         echo
         echo "Provisioning completed successfully!"
         ;;
-        
+
     *)
         echo "Invalid command specified: '$ARG_COMMAND'"
         usage
@@ -283,4 +287,4 @@ popd >/dev/null
 
 END=`date +%s`
 echo "(Completed in $(( ($END - $START)/60 )) min $(( ($END - $START)%60 )) sec)"
-echo 
+echo
