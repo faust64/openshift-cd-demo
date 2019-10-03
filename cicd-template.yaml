@@ -61,6 +61,10 @@ objects:
         <name>${PROXY_HOST}</name>
         <port>${PROXY_PORT}</port>
         <noProxyHost>*.svc.cluster.local
+      gogs
+      sonarqube
+      clair
+      nexus
       kubernetes.default
       kubernetes.default.svc
       *.local</noProxyHost>
