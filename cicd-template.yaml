@@ -617,15 +617,14 @@ objects:
             fi
 
             if test "${EPHEMERAL}" = true; then
-              oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-template.yaml \
+              oc process -f https://raw.githubusercontent.com/faust64/nexus/master/nexus3-template.yaml \
                 --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             else
-              oc process -f https://raw.githubusercontent.com/nicolasiltis/nexus/master/nexus3-persistent-template.yaml \
+              oc process -f https://raw.githubusercontent.com/faust64/nexus/master/nexus3-persistent-template.yaml \
                 --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             fi
-            oc patch route nexus --patch '{"spec":{"tls":{"insecureEdgeTerminationPolicy":"Redirect","termination":"edge"}}}'
 
             GOGS_SVC=$(oc get svc gogs -o template --template='{{.spec.clusterIP}}')
             GOGS_USER=gogs
