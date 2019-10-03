@@ -47,9 +47,9 @@ start: init
 
 reset:
 	oc delete -n $(CICD_PROJECT) \
-	    deployment/che pvc/che-data-volume sa/che sa/che-workspace svc/che-host \
-	    role/exec role/workspace-view rolebinding/che rolebinding/che-workspace-exec \
-	    rolebinding/che-workspace-view routes/che \
+	    deployment/che pvc/che-data-volume rolebinding/che svc/che-host \
+	    rolebinding/che-workspace-exec rolebinding/che-workspace-view \
+	    route/che sa/che sa/che-workspace role/exec role/workspace-view \
 	    dc/gogs pvc/gogs-data cm/gogs-config routes/gogs svc/gogs is/gogs \
 	    dc/gogs-postgresql pvc/gogs-postgres-data svc/gogs-postgresql  \
 	    dc/nexus pvc/nexus-pv svc/nexus routes/nexus is/nexus \

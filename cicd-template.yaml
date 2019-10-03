@@ -118,7 +118,7 @@ objects:
               cpu: 200m
               memory: 1Gi
             limits:
-              cpu: 500m
+              cpu: "1"
               memory: 3Gi
           volumeMounts:
           - mountPath: /var/lib/jenkins
@@ -230,8 +230,8 @@ objects:
           value: ${STAGE_PROJECT}
         - name: ENABLE_QUAY
           value: "${ENABLE_QUAY}"
-        - name: DEPLOY_CIAIR
-          value: "${DEPLOY_CIAIR}"
+        - name: DEPLOY_CLAIR
+          value: "${DEPLOY_CLAIR}"
         jenkinsfile: |-
           def mvnCmd = "mvn -s configuration/cicd-settings-nexus3.xml"
 
@@ -614,7 +614,9 @@ objects:
             export NO_PROXY=$NO_PROXY,$GOGS_SVC
             export no_proxy=$NO_PROXY
 
-            while ! curl http://$GOGS_SVC:3000/ >/dev/null 2>&1
+            oc rollout status dc gogs
+
+            while ! curl http://$GOGS_SVC:3000/user/sign_up >/dev/null 2>&1
             do
               echo waiting for gogs to start
               sleep 5
