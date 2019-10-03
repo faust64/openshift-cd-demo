@@ -109,6 +109,7 @@ This demo by default uses the WildFly community image. You can use the JBoss EAP
 {"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:21.102030","updater name":"alpine"}
 {"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:25.257204","updater name":"amzn1"}
 {"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:28.521377","updater name":"debian"}
+{"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:54:46.413008","updater name":"rhel"}
    ```
 
 other gotchas could involve proxies using whistlists filtering on DNS names or URL regexprs.
