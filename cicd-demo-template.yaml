@@ -33,7 +33,7 @@ objects:
     tags:
     - from:
         kind: DockerImage
-        name: ${JENKINS_IMAGE_SOURCE}:${JEKINS_IMAGE_TAG}
+        name: ${JENKINS_IMAGE_SOURCE}:${JENKINS_IMAGE_TAG}
       importPolicy:
         scheduled: true
       name: ${JENKINS_IMAGE_TAG}
