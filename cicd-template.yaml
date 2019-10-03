@@ -725,7 +725,7 @@ objects:
               else
                 oc process -f https://raw.githubusercontent.com/faust64/openshift-coreos-clair/master/clair-persistent.yaml \
                   "--param=HTTP_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" \
-                  "--param=CLAIR_DB_VOLUME_CAPACITY=${CLAIR_POSTGRES_VOLUME_CAPACITY}" | oc create -f-
+                  "--param=CLAIR_POSTGRES_VOLUME_CAPACITY=${CLAIR_DB_VOLUME_CAPACITY}" | oc create -f-
               fi
             fi
 
