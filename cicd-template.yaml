@@ -40,6 +40,20 @@ objects:
       kind: Service
       name: jenkins
 - apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: jenkins
+  spec:
+    tags:
+    - from:
+        kind: DockerImage
+        name: docker.io/openshift/jenkins-2-centos7:v3.11
+      importPolicy:
+        scheduled: true
+      name: v3.11
+      referencePolicy:
+        type: Local
+- apiVersion: v1
   data:
     proxy.xml: |-
       <?xml version='1.0' encoding='UTF-8'?>
@@ -47,9 +61,11 @@ objects:
         <name>${PROXY_HOST}</name>
         <port>${PROXY_PORT}</port>
         <noProxyHost>*.svc.cluster.local
+      kubernetes.default
+      kubernetes.default.svc
       *.local</noProxyHost>
         <secretPassword></secretPassword>
-        <testUrl>http://github.com</testUrl>
+        <testUrl>https://github.com</testUrl>
       </proxy>
   kind: ConfigMap
   metadata:
@@ -89,10 +105,6 @@ objects:
             value: jenkins
           - name: JNLP_SERVICE_NAME
             value: jenkins-jnlp
-# wwwwtf?!
-          - name: PATH
-            value: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-11-openjdk-11.0.4.11-1.el7_7.x86_64/bin
-# ^ shouldn't be needed & likely to break over time. quick fix for an issue in a very specific scenario
           - name: JAVA_GC_OPTS
             value: -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ParallelRefProcEnabled -XX:+ExplicitGCInvokesConcurrent -XX:+UnlockDiagnosticVMOptions -XX:G1SummarizeRSetStatsPeriod=1 -XX:MaxMetaspaceExpansion=64M -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20
           image: ' '
@@ -148,8 +160,7 @@ objects:
         - jenkins
         from:
           kind: ImageStreamTag
-          name: jenkins:latest
-          namespace: openshift
+          name: jenkins:v3.11
       type: ImageChange
 - apiVersion: v1
   kind: ServiceAccount
@@ -273,9 +284,9 @@ objects:
                         openshift.selector("bc", "tasks").startBuild("--from-file=target/ROOT.war", "--wait=true")
                       }
                       if (env.DEPLOY_CLAIR.toBoolean()) {
-                          // start scan job / separate container
-                          // maybe use separate pipeline and wait for its completion?
-                          echo "TODO"
+                        // start scan job / separate container
+                        // maybe use separate pipeline and wait for its completion?
+                        echo "TODO"
                       }
                     }
                   }
@@ -364,8 +375,8 @@ objects:
             <ttyEnabled>false</ttyEnabled>
             <resourceRequestCpu>200m</resourceRequestCpu>
             <resourceRequestMemory>512Mi</resourceRequestMemory>
-            <resourceLimitCpu>2</resourceLimitCpu>
-            <resourceLimitMemory>4Gi</resourceLimitMemory>
+            <resourceLimitCpu>1</resourceLimitCpu>
+            <resourceLimitMemory>3Gi</resourceLimitMemory>
             <envVars/>
           </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
         </containers>
@@ -399,6 +410,10 @@ objects:
             <command></command>
             <args>${computer.jnlpmac} ${computer.name}</args>
             <ttyEnabled>false</ttyEnabled>
+            <resourceRequestCpu>100m</resourceRequestCpu>
+            <resourceRequestMemory>512Mi</resourceRequestMemory>
+            <resourceLimitCpu>300m</resourceLimitCpu>
+            <resourceLimitMemory>1Gi</resourceLimitMemory>
             <envVars/>
           </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
         </containers>
