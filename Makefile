@@ -1,6 +1,6 @@
 DEV_PROJECT = dev
 STAGE_PROJECT = stage
-CICD_PROJECT = acoss
+CICD_PROJECT = cicd
 
 init:
 	@@if ! oc describe project $(DEV_PROJECT) >/dev/null 2>&1; then \
@@ -62,5 +62,3 @@ reset:
 	    rolebinding/default_admin job/cicd-demo-installer bc/tasks-pipeline || true
 	oc delete -n $(DEV_PROJECT) bc/tasks dc/tasks svc/tasks route/tasks is/tasks || true
 	oc delete -n $(STAGE_PROJECT) dc/tasks svc/tasks route/tasks || true
-
-#dev-*, stage-*
