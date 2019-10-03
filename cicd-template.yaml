@@ -245,11 +245,11 @@ objects:
           value: ${STAGE_PROJECT}
         - name: ENABLE_QUAY
           value: "${ENABLE_QUAY}"
-        - name: DEPLOY_CLAIR
+        - name: SCAN_IMAGES
           value: "${DEPLOY_CLAIR}"
         jenkinsfile: |-
           def mvnCmd = "mvn -s configuration/cicd-settings-nexus3.xml"
-
+          def cicdProject = ""
           pipeline {
             agent {
               label 'maven'
@@ -284,13 +284,111 @@ objects:
                   sh "cp target/openshift-tasks.war target/ROOT.war"
                   script {
                     openshift.withCluster() {
+                      openshift.withProject() {
+                        cicdProject = "${openshift.project()}"
+                      }
                       openshift.withProject(env.DEV_PROJECT) {
                         openshift.selector("bc", "tasks").startBuild("--from-file=target/ROOT.war", "--wait=true")
                       }
-                      if (env.DEPLOY_CLAIR.toBoolean()) {
-                        // start scan job / separate container
-                        // maybe use separate pipeline and wait for its completion?
-                        echo "TODO"
+                    }
+                  }
+                }
+              }
+              stage('Scan Image') {
+                when {
+                  expression {
+                    return env.SCAN_IMAGES == "true"
+                  }
+                }
+                agent {
+                  kubernetes {
+                    cloud 'openshift'
+                    label 'klar'
+                    containerTemplate {
+                      name 'jnlp'
+                      image "docker-registry.default.svc:5000/${cicdProject}/jenkins-agent-klar:master"
+                    }
+                    inheritFrom 'maven'
+                    serviceAccount 'jenkins'
+                  }
+                }
+                steps {
+                  script {
+                    openshift.withCluster() {
+                      try {
+                        sh """
+                        export HTTP_PROXY= HTTPS_PROXY= NO_PROXY=
+                        export http_proxy= https_proxy= no_proxy=
+                        echo "==== Scanning task:latest ===="
+                        if ! CLAIR_ADDR="http://clair:6060" \\
+                            CLAIR_TIMEOUT=10 DOCKER_INSECURE=true DOCKER_TIMEOUT=3 DOCKER_USER=jenkins \\
+                            DOCKER_PASSWORD="\$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \\
+                            JSON_OUTPUT=true REGISTRY_INSECURE=false \\
+                            klar "docker-registry.default.svc:5000/${DEV_PROJECT}/tasks:latest" >scan-output; then
+                          echo "==== Returned \$? ===="
+                        fi
+                        if ! test -s scan-output; then
+                          echo "==== Failed scanning image ===="
+                          rm scan-output
+                          exit 1
+                        fi
+                        echo "==== Done scanning - parsing output ===="
+                        for level in Critical Defcon1 High Low Medium Negligible Unknown
+                        do
+                          echo "==== Listing criticity '\$level' ===="
+                          cat scan-output | jq ".Vulnerabilities.\$level"
+                        done
+                        """
+                        def CRITICAL_COUNT = sh (
+                            script: "cat scan-output | jq '.Vulnerabilities.Critical' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                            returnStdout: true
+                          ).trim()
+                        def DEFCON1_COUNT = sh (
+                            script: "cat scan-output | jq '.Vulnerabilities.Defcon1' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                            returnStdout: true
+                          ).trim()
+                        def HIGH_COUNT = sh (
+                            script: "cat scan-output | jq '.Vulnerabilities.High' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                            returnStdout: true
+                          ).trim()
+                        def LOW_COUNT = sh (
+                            script: "cat scan-output | jq '.Vulnerabilities.Low' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                            returnStdout: true
+                          ).trim()
+                        def MEDIUM_COUNT = sh (
+                            script: "cat scan-output | jq '.Vulnerabilities.Medium' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                            returnStdout: true
+                          ).trim()
+                        def NEGLIGIBLE_COUNT = sh (
+                            script: "cat scan-output | jq '.Vulnerabilities.Negligible' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                            returnStdout: true
+                          ).trim()
+                        def UNKNOWN_COUNT = sh (
+                            script: "cat scan-output | jq '.Vulnerabilities.Unknown' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                            returnStdout: true
+                          ).trim()
+                        sh "rm -f scan-output"
+                        def score = "UNKNOWN"
+                        if (CRITICAL_COUNT != "0" || DEFCON1_COUNT != "0") { score = "CRITICAL" }
+                        else {
+                          if (HIGH_COUNT != "0") { score = "WARNING" }
+                          else { score = "OK" }
+                        }
+                        def notifyMsg = """
+                        [${score}] docker-registry.default.svc:5000/${DEV_PROJECT}/tasks:latest
+                        critical: ${CRITICAL_COUNT}
+                        defcon1: ${DEFCON1_COUNT}
+                        high: ${HIGH_COUNT}
+                        low: ${LOW_COUNT}
+                        medium: ${MEDIUM_COUNT}
+                        negligible: ${NEGLIGIBLE_COUNT}
+                        unknown: ${UNKNOWN_COUNT}
+                        """.stripIndent()
+                        currentBuild.description = notifyMsg
+                        echo "${notifyMsg}"
+                      } catch(e) {
+                        echo "In catch scanning image - ${e}"
+                        throw e
                       }
                     }
                   }
@@ -606,7 +704,9 @@ objects:
               oc patch route che --patch '{"spec":{"tls":{"insecureEdgeTerminationPolicy":"Redirect","termination":"edge"}}}'
             fi
 
-            if test "${DEPLOY_CLAIR}" = true; then
+            if test "${SCAN_IMAGES}" = true; then
+              oc process -f https://raw.githubusercontent.com/faust64/docker-jenkins-agent-klar/master/openshift.yaml \
+                "--param=HTTP_PROXY=$PROXY_URL" "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
               if test "${EPHEMERAL}" = true; then
                 oc process -f https://raw.githubusercontent.com/faust64/openshift-coreos-clair/master/clair-ephemeral.yaml \
                   "--param=HTTP_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
