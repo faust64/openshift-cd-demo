@@ -110,18 +110,18 @@ This demo by default uses the WildFly community image. You can use the JBoss EAP
 
 * Scanning images for vulnerabilities, if your score shows all 0s, right after deploying Clair, it is not unlikely Clair is not yet done initializing its database. RHEL repos may take longer.
    ```
-{"Event":"Start fetching vulnerabilities","Level":"info","Location":"rhel.go:92","Time":"2019-10-03 17:13:17.513592","package":"RHEL"}
-{"Event":"Start fetching vulnerabilities","Level":"info","Location":"ubuntu.go:85","Time":"2019-10-03 17:13:17.513666","package":"Ubuntu"}
-{"Event":"Start fetching vulnerabilities","Level":"info","Location":"alpine.go:52","Time":"2019-10-03 17:13:17.524607","package":"Alpine"}
-{"Event":"Start fetching vulnerabilities","Level":"info","Location":"amzn.go:84","Time":"2019-10-03 17:13:17.543121","package":"Amazon Linux 2018.03"}
-{"Event":"Start fetching vulnerabilities","Level":"info","Location":"amzn.go:84","Time":"2019-10-03 17:13:17.543449","package":"Amazon Linux 2"}
-{"Event":"Start fetching vulnerabilities","Level":"info","Location":"debian.go:63","Time":"2019-10-03 17:13:17.543538","package":"Debian"}
-{"Event":"Start fetching vulnerabilities","Level":"info","Location":"oracle.go:119","Time":"2019-10-03 17:13:17.543788","package":"Oracle Linux"}
-[...]
-{"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:21.102030","updater name":"alpine"}
-{"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:25.257204","updater name":"amzn1"}
-{"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:28.521377","updater name":"debian"}
-{"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:54:46.413008","updater name":"rhel"}
+   {"Event":"Start fetching vulnerabilities","Level":"info","Location":"rhel.go:92","Time":"2019-10-03 17:13:17.513592","package":"RHEL"}
+   {"Event":"Start fetching vulnerabilities","Level":"info","Location":"ubuntu.go:85","Time":"2019-10-03 17:13:17.513666","package":"Ubuntu"}
+   {"Event":"Start fetching vulnerabilities","Level":"info","Location":"alpine.go:52","Time":"2019-10-03 17:13:17.524607","package":"Alpine"}
+   {"Event":"Start fetching vulnerabilities","Level":"info","Location":"amzn.go:84","Time":"2019-10-03 17:13:17.543121","package":"Amazon Linux 2018.03"}
+   {"Event":"Start fetching vulnerabilities","Level":"info","Location":"amzn.go:84","Time":"2019-10-03 17:13:17.543449","package":"Amazon Linux 2"}
+   {"Event":"Start fetching vulnerabilities","Level":"info","Location":"debian.go:63","Time":"2019-10-03 17:13:17.543538","package":"Debian"}
+   {"Event":"Start fetching vulnerabilities","Level":"info","Location":"oracle.go:119","Time":"2019-10-03 17:13:17.543788","package":"Oracle Linux"}
+   [...]
+   {"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:21.102030","updater name":"alpine"}
+   {"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:25.257204","updater name":"amzn1"}
+   {"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:13:28.521377","updater name":"debian"}
+   {"Event":"finished fetching","Level":"info","Location":"updater.go:253","Time":"2019-10-03 17:54:46.413008","updater name":"rhel"}
    ```
 
 other gotchas could involve proxies using whistlists filtering on DNS names or URL regexprs.
