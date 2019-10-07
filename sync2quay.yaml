@@ -62,13 +62,15 @@ objects:
       type: JenkinsPipeline
 parameters:
 - name: QUAY_AUTHUSER
+  required: true
   value: "$app"
 - name: QUAY_HOSTNAME
-  value: registry.app.openshift-2.dev69-opk.recouv
+  required: true
+  value: quay.io
 - description: Quay.io password to push the images to tasks-sample-app repository on your Quay.io account
   displayName: Quay.io Password
   name: QUAY_PASSWORD
-  value: "SWVVZIYG3CH7024IH8KCN63CF40VHQH52OZ09HHAORTAQGFPRV700QDUDK7AAV4UGYCPODVNQJ8GTQ9ZLYUS38QCRA4NVS5UOUSFL0E13EB9QA4OPCVTHZDK"
+  required: true
 - description: Quay.io repository for pushing Tasks container images
   displayName: Quay.io Image Repository
   name: QUAY_REPOSITORY
@@ -77,6 +79,8 @@ parameters:
 - description: Quay.io username to push the images to tasks-sample-app repository on your Quay.io account
   displayName: Quay.io Username
   name: QUAY_USERNAME
+  required: true
+  value: cicd
 - name: SKOPEO_IMAGE
   value: docker.io/siamaksade/jenkins-slave-skopeo-centos7
 - name: SYNC_TAG
