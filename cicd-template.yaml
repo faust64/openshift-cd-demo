@@ -428,7 +428,7 @@ objects:
                     openshift.withCluster() {
                       if (env.ENABLE_QUAY.toBoolean()) {
                         withCredentials([usernamePassword(credentialsId: "${openshift.project()}-quay-cicd-secret", usernameVariable: "QUAY_USER", passwordVariable: "QUAY_PWD")]) {
-                          sh "skopeo copy docker://quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest docker://quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --src-creds \"$QUAY_USER:$QUAY_PWD\" --dest-creds \"$QUAY_USER:$QUAY_PWD\" --src-tls-verify=false --dest-tls-verify=false"
+                          sh "skopeo copy docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --src-creds \"$QUAY_USER:$QUAY_PWD\" --dest-creds \"$QUAY_USER:$QUAY_PWD\" --src-tls-verify=false --dest-tls-verify=false"
                         }
                       } else {
                         openshift.tag("${env.DEV_PROJECT}/tasks:latest", "${env.STAGE_PROJECT}/tasks:stage")
@@ -583,13 +583,13 @@ objects:
 
               # dev
               if ! oc describe secret quay-cicd-secret -n ${DEV_PROJECT} >/dev/null 2>&1; then
-                oc create secret docker-registry quay-cicd-secret --docker-server=quay.io --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${DEV_PROJECT}
+                oc create secret docker-registry quay-cicd-secret --docker-server=${QUAY_HOSTNAME} --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${DEV_PROJECT}
               fi
               if ! oc describe bc tasks -n ${DEV_PROJECT} >/dev/null 2>&1; then
-                oc new-build --name=tasks --image-stream=wildfly:latest --binary=true --push-secret=quay-cicd-secret --to-docker --to='quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest' -n ${DEV_PROJECT}
+                oc new-build --name=tasks --image-stream=wildfly:latest --binary=true --push-secret=quay-cicd-secret --to-docker --to='${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest' -n ${DEV_PROJECT}
               fi
               if ! oc describe dc tasks -n ${DEV_PROJECT} >/dev/null 2>&1; then
-                oc new-app --name=tasks --docker-image=quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest --allow-missing-images -n ${DEV_PROJECT}
+                oc new-app --name=tasks --docker-image=${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest --allow-missing-images -n ${DEV_PROJECT}
                 oc set triggers dc tasks --remove-all -n ${DEV_PROJECT}
                 oc patch dc tasks -p '{"spec": {"template": {"spec": {"containers": [{"name": "tasks", "imagePullPolicy": "Always"}]}}}}' -n ${DEV_PROJECT}
                 oc set probe dc/tasks --readiness --get-url=http://:8080/ws/demo/healthcheck --initial-delay-seconds=30 --failure-threshold=10 --period-seconds=10 -n ${DEV_PROJECT}
@@ -603,10 +603,10 @@ objects:
 
               # stage
               if ! oc describe secret quay-cicd-secret -n ${STAGE_PROJECT} >/dev/null 2>&1; then
-                oc create secret docker-registry quay-cicd-secret --docker-server=quay.io --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${STAGE_PROJECT}
+                oc create secret docker-registry quay-cicd-secret --docker-server=${QUAY_HOSTNAME} --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${STAGE_PROJECT}
               fi
               if ! oc describe bc tasks -n ${STAGE_PROJECT} >/dev/null 2>&1; then
-                oc new-app --name=tasks --docker-image=quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --allow-missing-images -n ${STAGE_PROJECT}
+                oc new-app --name=tasks --docker-image=${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --allow-missing-images -n ${STAGE_PROJECT}
                 oc set triggers dc tasks --remove-all -n ${STAGE_PROJECT}
                 oc patch dc tasks -p '{"spec": {"template": {"spec": {"containers": [{"name": "tasks", "imagePullPolicy": "Always"}]}}}}' -n ${STAGE_PROJECT}
                 oc secrets link default quay-cicd-secret --for=pull -n ${STAGE_PROJECT}
@@ -731,11 +731,12 @@ objects:
 
             if test "${EPHEMERAL}" = true; then
               oc process -f https://raw.githubusercontent.com/faust64/nexus/master/nexus3-template.yaml \
-                --param=NEXUS_VERSION=3.13.0 "--param=HTTP_PROXY=$PROXY_URL" \
+                --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/faust64/nexus/master/nexus3-persistent-template.yaml \
-                --param=NEXUS_VERSION=3.13.0 "--param=HTTP_PROXY=$PROXY_URL" "--param=VOLUME_CAPACITY=${NEXUS_VOLUME_CAPACITY}" \
+                --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
+                "--param=VOLUME_CAPACITY=${NEXUS_VOLUME_CAPACITY}" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             fi
 
@@ -881,6 +882,8 @@ parameters:
   displayName: HTTP Proxy Exclusions
   name: PROXY_EXCLUDE_NAMES
   value: .cluster.local,.svc
+- name: QUAY_HOSTNAME
+  value: quay.io
 - description: Quay.io password to push the images to tasks-sample-app repository on your Quay.io account
   displayName: Quay.io Password
   name: QUAY_PASSWORD
