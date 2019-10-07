@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: Template
+labels:
+  group: cicd
+metadata:
+  annotations:
+    iconClass: icon-jenkins
+    tags: jenkins,pipeline,clair,scan
+  name: cicd
+objects:
+# Pipeline
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    annotations:
+      pipeline.alpha.openshift.io/uses: '[{"name": "jenkins", "namespace": "", "kind": "DeploymentConfig"}]'
+    labels:
+      app: cicd-pipeline
+      name: cicd-pipeline
+    name: sign-pipeline
+  spec:
+    strategy:
+      jenkinsPipelineStrategy:
+        jenkinsfile: |-
+          properties([
+                  parameters([
+                          string(defaultValue: '${SCAN_IMAGE}', description: 'Image Address to Scan', name: 'imageAddr')
+                      ])
+              ])
+          podTemplate(label: "klar", name: "klar", cloud: 'openshift',
+                      containers: [
+                              containerTemplate(
+                                      name: 'jnlp',
+                                      image: "${KLAR_IMAGE}"
+                                  )
+                         ],
+                     inheritFrom: 'maven',
+                     serviceAccount: 'jenkins') {
+              node("klar") {
+                  stage('Scan Image') {
+                      script {
+                          openshift.withCluster() {
+                              try {
+                                  sh """
+                                  export HTTP_PROXY= HTTPS_PROXY= NO_PROXY=
+                                  export http_proxy= https_proxy= no_proxy=
+                                  echo "==== Scanning task:latest ===="
+                                  if ! CLAIR_ADDR="http://clair:6060" \\
+                                          CLAIR_TIMEOUT=10 DOCKER_INSECURE=true DOCKER_TIMEOUT=3 DOCKER_USER=jenkins \\
+                                          DOCKER_PASSWORD="\$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \\
+                                          JSON_OUTPUT=true REGISTRY_INSECURE=false \\
+                                          klar "${params.imageAddr}" >scan-output; then
+                                      echo "==== Returned \$? ===="
+                                  fi
+                                  if ! test -s scan-output; then
+                                      echo "==== Failed scanning image ===="
+                                      rm scan-output
+                                      exit 1
+                                  fi
+                                  echo "==== Done scanning - parsing output ===="
+                                  for level in Critical Defcon1 High Low Medium Negligible Unknown
+                                  do
+                                      echo "==== Listing criticity '\$level' ===="
+                                      cat scan-output | jq ".Vulnerabilities.\$level"
+                                  done
+                                  """
+                                  def CRITICAL_COUNT = sh (
+                                          script: "cat scan-output | jq '.Vulnerabilities.Critical' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                                          returnStdout: true
+                                      ).trim()
+                                  def DEFCON1_COUNT = sh (
+                                          script: "cat scan-output | jq '.Vulnerabilities.Defcon1' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                                          returnStdout: true
+                                      ).trim()
+                                  def HIGH_COUNT = sh (
+                                          script: "cat scan-output | jq '.Vulnerabilities.High' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                                          returnStdout: true
+                                      ).trim()
+                                  def LOW_COUNT = sh (
+                                          script: "cat scan-output | jq '.Vulnerabilities.Low' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                                          returnStdout: true
+                                      ).trim()
+                                  def MEDIUM_COUNT = sh (
+                                          script: "cat scan-output | jq '.Vulnerabilities.Medium' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                                          returnStdout: true
+                                      ).trim()
+                                  def NEGLIGIBLE_COUNT = sh (
+                                          script: "cat scan-output | jq '.Vulnerabilities.Negligible' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                                          returnStdout: true
+                                      ).trim()
+                                  def UNKNOWN_COUNT = sh (
+                                          script: "cat scan-output | jq '.Vulnerabilities.Unknown' | sed 's|^null\$|[]|' | jq '.[].Name ' | awk 'END{print NR}'",
+                                          returnStdout: true
+                                      ).trim()
+                                  sh "rm -f scan-output"
+                                  def score = "UNKNOWN"
+                                  if (CRITICAL_COUNT != "0" || DEFCON1_COUNT != "0") { score = "CRITICAL" }
+                                  else {
+                                      if (HIGH_COUNT != "0") { score = "WARNING" }
+                                      else { score = "OK" }
+                                  }
+                                  def notifyMsg = """
+                                  [${score}] ${params.imageAddr}
+                                  critical: ${CRITICAL_COUNT}
+                                  defcon1: ${DEFCON1_COUNT}
+                                  high: ${HIGH_COUNT}
+                                  low: ${LOW_COUNT}
+                                  medium: ${MEDIUM_COUNT}
+                                  negligible: ${NEGLIGIBLE_COUNT}
+                                  unknown: ${UNKNOWN_COUNT}
+                                  """.stripIndent()
+                                  currentBuild.description = notifyMsg
+                                  echo "${notifyMsg}"
+                              } catch(e) {
+                                  echo "In catch scanning image - ${e}"
+                                  throw e
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      type: JenkinsPipeline
+parameters:
+- name: KLAR_IMAGE
+  value: "docker-registry.default.svc:5000/cicd/jenkins-agent-klar:master"
+- name: SCAN_IMAGE
+  value: "docker-registry.default.svc:5000/dev/tasks:latest"
