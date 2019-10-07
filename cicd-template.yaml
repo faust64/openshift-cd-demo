@@ -681,14 +681,12 @@ objects:
             fi
             if test "${EPHEMERAL}" = true; then
               oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-template.yaml \
-                  --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME \
-                  --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
-                  "--param=PROXY_PORT=$PROXY_PORT" | oc create -f-
+                  --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
+                  "--param=PROXY_PORT=$PROXY_PORT" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-persistent-template.yaml \
-                  --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME \
-                  --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
-                  "--param=PROXY_PORT=$PROXY_PORT" | oc create -f-
+                  --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
+                  "--param=PROXY_PORT=$PROXY_PORT" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             fi
 
             sleep 5
