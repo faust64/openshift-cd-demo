@@ -47,6 +47,13 @@ ARG_QUAY_HOSTNAME=quay.io
 ARG_QUAY_USER=
 ARG_QUAY_PASS=
 
+if test "$http_proxy" -a -z "$HTTP_PROXY"; then
+    HTTP_PROXY=$http_proxy
+fi
+if echo "$HTTP_PROXY" | grep http:// >/dev/null; then
+    eval `echo "$HTTP_PROXY" | sed -e 's|http://||' -e 's|/*$||' | awk -F: '{print "PROXY_HOST="$1" PROXY_PORT="$2}'`
+fi
+
 while :; do
     case $1 in
         deploy)
@@ -90,6 +97,15 @@ while :; do
                 usage
                 exit 255
             fi
+            ;;
+        --proxy-host)
+            PROXY_HOST=$2
+            ;;
+        --proxy-port)
+            PROXY_PORT=$2
+            ;;
+        --proxy-exclude)
+            PROXY_EXCLUDE=$2
             ;;
         --enable-quay)
             ARG_ENABLE_QUAY=true
@@ -166,6 +182,9 @@ if $ARG_ENABLE_QUAY; then
 	ARG_QUAY_AUTHUSER="$ARG_QUAY_USERNAME"
     fi
 fi
+if test -z "$PROXY_HOST"; then
+    PROXY_PORT= PROXY_EXCLUDE=
+fi
 
 
 ################################################################################
@@ -208,7 +227,13 @@ function deploy() {
 
   local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template.yaml
   echo "Using template $template"
-  oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p DEPLOY_CLAIR=$ARG_DEPLOY_CLAIR -p DEPLOY_CHE=$ARG_DEPLOY_CHE -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_QUAY=$ARG_ENABLE_QUAY -p QUAY_HOSTNAME=$ARG_QUAY_HOSTNAME -p "QUAY_AUTHUSER=$ARG_QUAY_AUTHUSER" -p "QUAY_USERNAME=$ARG_QUAY_USER" -p "QUAY_PASSWORD=$ARG_QUAY_PASS" -n cicd-$PRJ_SUFFIX
+  oc $ARG_OC_OPS new-app -f $template \
+      -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX \
+      -p DEPLOY_CLAIR=$ARG_DEPLOY_CLAIR -p DEPLOY_CHE=$ARG_DEPLOY_CHE \
+      -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_QUAY=$ARG_ENABLE_QUAY \
+      -p "PROXY_HOST=$PROXY_HOST" -p "PROXY_PORT=$PROXY_PORT" -p "PROXY_EXCLUDE_NAMES=$PROXY_EXCLUDE" \
+      -p "QUAY_HOSTNAME=$ARG_QUAY_HOSTNAME" -p "QUAY_AUTHUSER=$ARG_QUAY_AUTHUSER" \
+      -p "QUAY_USERNAME=$ARG_QUAY_USER" -p "QUAY_PASSWORD=$ARG_QUAY_PASS" -n cicd-$PRJ_SUFFIX
 }
 
 function make_idle() {
