@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: quay-enterprise
+objects:
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    annotation:
+      doc: "access.redhat.com/solutions/3533201"
+    name: redhat-pull-secret
+  data:
+    .dockerconfigjson: ${DOCKER_CONFIG}
+  type: kubernetes.io/dockerconfigjson
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: quay-admin
+  stringData:
+    superuser-username: ${QUAY_ADMIN_USER}
+    superuser-password: ${QUAY_ADMIN_PASS}
+    superuser-email: ${QUAY_ADMIN_EMAIL}
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: quay-config
+  stringData:
+    config-app-password: ${QUAY_CONFIG_PASS}
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: quay-db
+  stringData:
+    database-username: ${QUAY_POSTGRES_USER}
+    database-password: ${QUAY_POSTGRES_PASS}
+    database-root-password: ${QUAY_POSTGRES_ADMIN_PASS}
+    database-name: ${QUAY_POSTGRES_DATABASE}
+- apiVersion: redhatcop.redhat.io/v1alpha1
+  kind: QuayEcosystem
+  metadata:
+    name: ${QUAY_NAME}
+  spec:
+    clair:
+      database:
+        deploymentStrategy: Recreate
+        resources:
+          limits:
+            cpu: 100m
+            memory: 512Mi
+          requests:
+            cpu: 30m
+            memory: 128Mi
+        volumeSize: 10Gi
+      deploymentStrategy: RollingUpdate
+      enabled: true
+      envVars:
+      - name: http_proxy
+        value: "${HTTP_PROXY}"
+      - name: https_proxy
+        value: "${HTTP_PROXY}"
+      - name: no_proxy
+        value: "${PROXY_EXCLUDE_NAMES}"
+      imagePullSecretName: redhat-pull-secret
+      resources:
+        limits:
+          cpu: 200m
+          memory: 2Gi
+        requests:
+          cpu: 50m
+          memory: 128Mi
+      updateInterval: 60m
+    quay:
+      configRouteHost: quay.${ROUTE_DOMAIN}
+      configSecretName: quay-config
+      database:
+        credentialsSecretName: quay-db
+        deploymentStrategy: Recreate
+        volumeSize: 10Gi
+      deploymentStrategy: Recreate
+      envVars:
+      - name: http_proxy
+        value: "${HTTP_PROXY}"
+      - name: https_proxy
+        value: "${HTTP_PROXY}"
+      - name: no_proxy
+        value: "${PROXY_EXCLUDE_NAMES}"
+      imagePullSecretName: redhat-pull-secret
+      registryStorage:
+        persistentVolumeAccessMode: [ ReadWriteOnce ]
+        persistentVolumeSize: 40Gi
+      resources:
+        limits:
+          cpu: 200m
+          memory: 2Gi
+        requests:
+          cpu: 50m
+          memory: 128Mi
+      routeHost: registry.${ROUTE_DOMAIN}
+      superuserCredentialsSecretName: quay-admin
+    redis:
+      deploymentStrategy: RollingUpdate
+      resources:
+        limits:
+          cpu: 100m
+          memory: 512Mi
+        requests:
+          cpu: 10m
+          memory: 64Mi
+parameters:
+- name: DOCKER_CONFIG
+  description: see access.redhat.com/solutions/3533201
+  displayName: Docker Configuration pulling quay and coreos images
+  required: true
+- description: HTTP Proxy URL
+  displayName: HTTP Proxy URL
+  name: HTTP_PROXY
+- description: Comma-separated list of addresses or names that should not be accessed using HTTP Proxies
+  displayName: HTTP Proxy Exclusions
+  name: PROXY_EXCLUDE_NAMES
+- name: QUAY_ADMIN_USER
+  value: quayadmin
+- name: QUAY_ADMIN_PASS
+  value: redhat42
+- name: QUAY_ADMIN_EMAIL
+  value: dummy@example.com
+- name: QUAY_CONFIG_PASS
+  from: '[a-zA-Z0-9]{20}'
+  generate: expression
+- name: QUAY_NAME
+  required: true
+  value: demo
+- name: QUAY_POSTGRES_ADMIN_PASS
+  description: Quay Postgres Admin account password
+  displayName: Quay Postgres Admin Password
+  from: '[a-zA-Z0-9]{40}'
+  generate: expression
+- name: QUAY_POSTGRES_DATABASE
+  description: Quay Postgres database name
+  displayName: Quay Postgres Database
+  required: true
+  value: quay
+- name: QUAY_POSTGRES_PASS
+  description: Quay Postgres account password
+  displayName: Quay Postgres User Password
+  from: '[a-zA-Z0-9]{40}'
+  generate: expression
+- name: QUAY_POSTGRES_USER
+  description: Quay Postgres service account username
+  displayName: Quay Postgres Username
+  from: 'user[a-zA-Z0-9]{6}'
+  generate: expression
+- name: ROUTE_DOMAIN
+  description: "DNS Domain Suffix (eg: apps.example.com)"
+  displayName: Routes Domain Suffix
+  required: true
