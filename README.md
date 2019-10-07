@@ -19,11 +19,11 @@ On every pipeline execution, the code goes through the following steps:
 2. The WAR artifact is pushed to Nexus Repository manager
 3. A container image (_tasks:latest_) is built based on the _Tasks_ application WAR artifact deployed on WildFly
 4. If CoreOS is enabled, the resulting image is scanned
-4. If Quay.io is enabled, the Tasks app container image is pushed to the quay.io image registry and a security scan is scheduled
-5. The _Tasks_ container image is deployed in a fresh new container in DEV project (pulled form Quay.io, if enabled)
+4. If Quay.io is enabled, the Tasks app container image is pushed to Quay (self-hosted or Quay.io) image registry and a security scan is scheduled
+5. The _Tasks_ container image is deployed in a fresh new container in DEV project (pulled form Quay, if enabled)
 6. If tests successful, the pipeline is paused for the release manager to approve the release to STAGE
-7. If approved, the DEV image is tagged in the STAGE project. If Quay.io is enabled, the image is tagged in the Quay.io image repository using [Skopeo](https://github.com/containers/skopeo)
-8. The staged image is deployed in a fresh new container in the STAGE project (pulled form Quay.io, if enabled)
+7. If approved, the DEV image is tagged in the STAGE project. If Quay is enabled, the image is tagged in the Quay image repository using [Skopeo](https://github.com/containers/skopeo)
+8. The staged image is deployed in a fresh new container in the STAGE project (pulled form Quay, if enabled)
 
 The following diagram shows the steps included in the deployment pipeline:
 
@@ -52,6 +52,18 @@ quay.io credentials:
 In that case, the pipeline would create an image repository called `tasks-app` (default name but configurable)
 on your Quay.io account and use that instead of the integrated OpenShift
 registry, for pushing the built images and also pulling images for deployment.
+
+If you want to deploy Quay on OpenShift, then as a cluster-admin, use the following:
+
+  ```
+  make quay
+  ```
+Once quay is started, we may log in to `registry.<OPENSHIFT-APPS-DOMAIN>` (user: quayadmin, pass: redhat42).
+
+Then, we may deploy our demo pipeline:
+  ```
+  ./provision.sh deploy --enable-quay --quay-backend registry.<OPENSHIFT-APPS-DOMAIN> --quay-authuser='$app' --quay-username cicd --quay-password <auth-token>
+  ```
 
 ## Manual Deploy on OpenShift
 Follow these [instructions](docs/local-cluster.md) in order to create a local OpenShift cluster.

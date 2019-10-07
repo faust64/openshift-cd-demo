@@ -21,9 +21,11 @@ function usage() {
     echo "   unidle                   Make all demo services unidle"
     echo
     echo "OPTIONS:"
-    echo "   --enable-quay              Optional    Enable integration of build and deployments with quay.io"
-    echo "   --quay-username            Optional    quay.io username to push the images to a quay.io account. Required if --enable-quay is set"
-    echo "   --quay-password            Optional    quay.io password to push the images to a quay.io account. Required if --enable-quay is set"
+    echo "   --enable-quay              Optional    Enable integration of build and deployments with Quay"
+    echo "   --quay-authuser            Optional    username authenticating against Quay registry."
+    echo "   --quay-backend             Optional    quay backend pushing images to a Quay registry. Defaults to quay.io."
+    echo "   --quay-username            Optional    quay username or organization pushing images to a Quay registry. Required if --enable-quay is set"
+    echo "   --quay-password            Optional    quay password or token pushing images to a Quay registry. Required if --enable-quay is set"
     echo "   --user [username]          Optional    The admin user for the demo projects. Required if logged in as system:admin"
     echo "   --project-suffix [suffix]  Optional    Suffix to be added to demo project names e.g. ci-SUFFIX. If empty, user will be used as suffix"
     echo "   --ephemeral                Optional    Deploy demo without persistent storage. Default false"
@@ -40,6 +42,8 @@ ARG_OC_OPS=
 ARG_DEPLOY_CHE=false
 ARG_DEPLOY_CLAIR=false
 ARG_ENABLE_QUAY=false
+ARG_QUAY_AUTHUSER=
+ARG_QUAY_HOSTNAME=quay.io
 ARG_QUAY_USER=
 ARG_QUAY_PASS=
 
@@ -90,6 +94,26 @@ while :; do
         --enable-quay)
             ARG_ENABLE_QUAY=true
             ;;
+        --quay-backend)
+            if [ -n "$2" ]; then
+                ARG_QUAY_HOSTNAME=$2
+                shift
+            else
+                printf 'ERROR: "--quay-backend" requires a non-empty value.\n' >&2
+                usage
+                exit 255
+            fi
+            ;;
+        --quay-authuser)
+            if [ -n "$2" ]; then
+                ARG_QUAY_AUTHUSER=$2
+                shift
+            else
+                printf 'ERROR: "--quay-authuser" requires a non-empty value.\n' >&2
+                usage
+                exit 255
+            fi
+            ;;
         --quay-username)
             if [ -n "$2" ]; then
                 ARG_QUAY_USER=$2
@@ -137,6 +161,11 @@ while :; do
 
     shift
 done
+if $ARG_ENABLE_QUAY; then
+    if test -z "$ARG_QUAY_AUTHUSER"; then
+	ARG_QUAY_AUTHUSER="$ARG_QUAY_USERNAME"
+    fi
+fi
 
 
 ################################################################################
@@ -179,7 +208,7 @@ function deploy() {
 
   local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template.yaml
   echo "Using template $template"
-  oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p DEPLOY_CLAIR=$ARG_DEPLOY_CLAIR -p DEPLOY_CHE=$ARG_DEPLOY_CHE -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_QUAY=$ARG_ENABLE_QUAY -p QUAY_USERNAME=$ARG_QUAY_USER -p QUAY_PASSWORD=$ARG_QUAY_PASS -n cicd-$PRJ_SUFFIX
+  oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p DEPLOY_CLAIR=$ARG_DEPLOY_CLAIR -p DEPLOY_CHE=$ARG_DEPLOY_CHE -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_QUAY=$ARG_ENABLE_QUAY -p QUAY_HOSTNAME=$ARG_QUAY_HOSTNAME -p "QUAY_AUTHUSER=$ARG_QUAY_AUTHUSER" -p "QUAY_USERNAME=$ARG_QUAY_USER" -p "QUAY_PASSWORD=$ARG_QUAY_PASS" -n cicd-$PRJ_SUFFIX
 }
 
 function make_idle() {

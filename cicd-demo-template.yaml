@@ -418,7 +418,7 @@ objects:
                     openshift.withCluster() {
                       if (env.ENABLE_QUAY.toBoolean()) {
                         withCredentials([usernamePassword(credentialsId: "${openshift.project()}-quay-cicd-secret", usernameVariable: "QUAY_USER", passwordVariable: "QUAY_PWD")]) {
-                          sh "skopeo copy docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --src-creds \"$QUAY_USER:$QUAY_PWD\" --dest-creds \"$QUAY_USER:$QUAY_PWD\" --src-tls-verify=false --dest-tls-verify=false"
+                          sh "skopeo copy docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --src-creds '$QUAY_USER:$QUAY_PWD' --dest-creds '$QUAY_USER:$QUAY_PWD' --src-tls-verify=false --dest-tls-verify=false"
                         }
                       } else {
                         openshift.tag("${env.DEV_PROJECT}/tasks:latest", "${env.STAGE_PROJECT}/tasks:stage")
@@ -567,13 +567,13 @@ objects:
             if test "${ENABLE_QUAY}" = true; then
               # cicd
               if ! oc describe secret quay-cicd-secret >/dev/null 2>&1; then
-                oc create secret generic quay-cicd-secret --from-literal="username=${QUAY_USERNAME}" --from-literal="password=${QUAY_PASSWORD}" -n ${CICD_NAMESPACE}
+                oc create secret generic quay-cicd-secret --from-literal='username=${QUAY_AUTHUSER}' --from-literal='password=${QUAY_PASSWORD}' -n ${CICD_NAMESPACE}
               fi
               oc label secret quay-cicd-secret credential.sync.jenkins.openshift.io=true -n ${CICD_NAMESPACE} --overwrite=true
 
               # dev
               if ! oc describe secret quay-cicd-secret -n ${DEV_PROJECT} >/dev/null 2>&1; then
-                oc create secret docker-registry quay-cicd-secret --docker-server=${QUAY_HOSTNAME} --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${DEV_PROJECT}
+                oc create secret docker-registry quay-cicd-secret --docker-server=${QUAY_HOSTNAME} --docker-username='${QUAY_AUTHUSER}' --docker-password='${QUAY_PASSWORD}' --docker-email=cicd@redhat.com -n ${DEV_PROJECT}
               fi
               if ! oc describe bc tasks -n ${DEV_PROJECT} >/dev/null 2>&1; then
                 oc new-build --name=tasks --image-stream=wildfly:latest --binary=true --push-secret=quay-cicd-secret --to-docker --to='${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest' -n ${DEV_PROJECT}
@@ -593,7 +593,7 @@ objects:
 
               # stage
               if ! oc describe secret quay-cicd-secret -n ${STAGE_PROJECT} >/dev/null 2>&1; then
-                oc create secret docker-registry quay-cicd-secret --docker-server=${QUAY_HOSTNAME} --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${STAGE_PROJECT}
+                oc create secret docker-registry quay-cicd-secret --docker-server=${QUAY_HOSTNAME} --docker-username='${QUAY_AUTHUSER}' --docker-password='${QUAY_PASSWORD}' --docker-email=cicd@redhat.com -n ${STAGE_PROJECT}
               fi
               if ! oc describe bc tasks -n ${STAGE_PROJECT} >/dev/null 2>&1; then
                 oc new-app --name=tasks --docker-image=${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --allow-missing-images -n ${STAGE_PROJECT}
@@ -670,13 +670,23 @@ objects:
               PROXY_URL=""
             fi
             if test "${EPHEMERAL}" = true; then
-              oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-template.yaml \
+              if test "${GOGS_WITH_PROXY}" = true; then
+                oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-template.yaml \
+                    --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
+                    "--param=PROXY_PORT=$PROXY_PORT" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
+              else
+                oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-template.yaml \
+                    --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=" \
+                    "--param=PROXY_PORT=" "--param=NO_PROXY=" | oc create -f-
+              fi
+            elif test "${GOGS_WITH_PROXY}" = true; then
+              oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-persistent-template.yaml \
                   --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
                   "--param=PROXY_PORT=$PROXY_PORT" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/faust64/gogs-openshift-docker/master/openshift/gogs-persistent-template.yaml \
-                  --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=$PROXY" \
-                  "--param=PROXY_PORT=$PROXY_PORT" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
+                  --param=GOGS_VERSION=0.11.34 --param=HOSTNAME=$GOGS_HOSTNAME --param=SKIP_TLS_VERIFY=true "--param=PROXY_HOST=" \
+                  "--param=PROXY_PORT=" "--param=NO_PROXY=" | oc create -f-
             fi
 
             sleep 5
@@ -816,17 +826,17 @@ parameters:
 - description: Deploy Eclipse Che in order to use as an online IDE for changing code in this demo
   displayName: Deploy Eclipse Che
   name: DEPLOY_CHE
-  required: true
   value: "false"
-- description: Integrate image build and deployment with Quay.io
-  displayName: Integrate Quay.io
+- description: Integrate image build and deployment with Quay
+  displayName: Integrate Quay
   name: ENABLE_QUAY
   required: true
   value: "false"
 - description: Use no persistent storage for Gogs, Nexus, SonarQube and CoreOS Clair (demo)
   displayName: Ephemeral
   name: EPHEMERAL
-  required: true
+  value: "true"
+- name: GOGS_WITH_PROXY
   value: "true"
 - displayName: Jenkins Image Source
   name: JENKINS_IMAGE_SOURCE
@@ -856,16 +866,19 @@ parameters:
   value: .cluster.local,.svc
 - name: QUAY_HOSTNAME
   value: quay.io
-- description: Quay.io password to push the images to tasks-sample-app repository on your Quay.io account
-  displayName: Quay.io Password
+- description: Quay password to push the images to tasks-sample-app repository on your Quay account
+  displayName: Quay Password
   name: QUAY_PASSWORD
-- description: Quay.io repository for pushing Tasks container images
-  displayName: Quay.io Image Repository
+- description: Quay repository for pushing Tasks container images
+  displayName: Quay Image Repository
   name: QUAY_REPOSITORY
   required: true
   value: tasks-app
-- description: Quay.io username to push the images to tasks-sample-app repository on your Quay.io account
-  displayName: Quay.io Username
+- description: Quay username authenticating during push against Quay Registry
+  displayName: Quay Auth Username
+  name: QUAY_AUTHUSER
+- description: Quay organization username to push the images to tasks-sample-app repository on your Quay account
+  displayName: Quay Organization or Username
   name: QUAY_USERNAME
 - displayName: STAGE project name
   name: STAGE_PROJECT

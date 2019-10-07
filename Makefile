@@ -2,6 +2,7 @@ DEV_PROJECT = dev
 STAGE_PROJECT = stage
 CICD_PROJECT = cicd
 
+.PHONY: init
 init:
 	@@if ! oc describe project $(DEV_PROJECT) >/dev/null 2>&1; then \
 	    oc new-project $(DEV_PROJECT) --display-name="Tasks - Dev"; \
@@ -26,6 +27,7 @@ init:
 	    oc policy add-role-to-group edit system:serviceaccounts:$(CICD_PROJECT) -n $(STAGE_PROJECT); \
 	fi
 
+.PHONY: start
 start: init
 	@@if test -z "$$HTTP_PROXY"; then \
 	    oc process -f cicd-template.yaml -p DEV_PROJECT=$(DEV_PROJECT) -p STAGE_PROJECT=$(STAGE_PROJECT) \
@@ -45,6 +47,7 @@ start: init
 		| oc apply -n $(CICD_PROJECT) -f-; \
 	fi
 
+.PHONY: quay
 quay:
 	@@if ! test -d quay-operator; then \
 	    git clone https://github.com/redhat-cop/quay-operator; \
@@ -80,6 +83,7 @@ quay:
 	    fi | oc apply -n quay-enterprise -f-; \
 	fi
 
+.PHONY: reset
 reset:
 	oc delete -n $(CICD_PROJECT) \
 	    deployment/che pvc/che-data-volume rolebinding/che svc/che-host \
