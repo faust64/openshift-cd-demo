@@ -6,7 +6,7 @@ metadata:
   annotations:
     iconClass: icon-jenkins
     tags: jenkins,pipeline,clair,scan
-  name: cicd
+  name: scan
 objects:
 # Pipeline
 - apiVersion: v1
@@ -17,7 +17,7 @@ objects:
     labels:
       app: cicd-pipeline
       name: cicd-pipeline
-    name: sign-pipeline
+    name: scan-pipeline
   spec:
     strategy:
       jenkinsPipelineStrategy:
