@@ -100,6 +100,6 @@ reset:
 	    dc/clair-postgres secret/clair-postgres pvc/clair-postgres svc/clair-postgres \
 	    dc/clair secret/clair svc/clair route/clair is/clair \
 	    rolebinding/default_admin job/cicd-demo-installer bc/tasks-pipeline \
-	    secrets/quay-cicd-secret || true
+	    secrets/quay-cicd-secret bc/sign-pipeline bc/sync2quay-pipeline || true
 	oc delete -n $(DEV_PROJECT) bc/tasks dc/tasks svc/tasks route/tasks is/tasks || true
 	oc delete -n $(STAGE_PROJECT) dc/tasks svc/tasks route/tasks || true
