@@ -297,7 +297,7 @@ objects:
               stage('Scan Image') {
                 when {
                   expression {
-                    return env.SCAN_IMAGES == "true"
+                    return env.SCAN_IMAGES == "true" && env.ENABLE_QUAY != "true"
                   }
                 }
                 agent {
@@ -712,7 +712,7 @@ objects:
               oc patch route che --patch '{"spec":{"tls":{"insecureEdgeTerminationPolicy":"Redirect","termination":"edge"}}}'
             fi
 
-            if test "${DEPLOY_CLAIR}" = true; then
+            if test "${DEPLOY_CLAIR}" = true -a "${ENABLE_QUAY}" != true; then
               oc process -f https://raw.githubusercontent.com/faust64/docker-jenkins-agent-klar/master/openshift.yaml \
                 "--param=HTTP_PROXY=$PROXY_URL" "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
               if test "${EPHEMERAL}" = true; then
