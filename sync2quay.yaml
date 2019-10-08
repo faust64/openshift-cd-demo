@@ -46,15 +46,17 @@ objects:
                      inheritFrom: 'maven',
                      serviceAccount: 'jenkins') {
               node("skopeo") {
-                  script {
+                  stage('Push Image') {
+                      script {
                       openshift.withCluster() {
-                          def token = sh (
-                                 script: "cat /var/run/secrets/kubernetes.io/serviceaccount/token",
-                                 returnStdout: true
-                             )
-                          def dst = "${params.quayHostname}/${params.quayProject}/${params.quayRepo}:${params.imageTag}"
-                          def src = "${params.dkrHostname}/${params.dkrProject}/${params.dkrRepo}:${params.imageTag}"
-                          sh "skopeo copy docker://${src} docker://${dst} --src-creds 'dummy:${token}' --dest-creds '${params.quayUser}:${params.quayPass}' --src-tls-verify=false --dest-tls-verify=false || sleep 3600"
+                              def token = sh (
+                                     script: "cat /var/run/secrets/kubernetes.io/serviceaccount/token",
+                                     returnStdout: true
+                                 )
+                              def dst = "${params.quayHostname}/${params.quayProject}/${params.quayRepo}:${params.imageTag}"
+                              def src = "${params.dkrHostname}/${params.dkrProject}/${params.dkrRepo}:${params.imageTag}"
+                              sh "skopeo copy docker://${src} docker://${dst} --src-creds 'dummy:${token}' --dest-creds '${params.quayUser}:${params.quayPass}' --src-tls-verify=false --dest-tls-verify=false || sleep 3600"
+                          }
                       }
                   }
               }
