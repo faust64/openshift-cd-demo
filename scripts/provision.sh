@@ -226,6 +226,9 @@ function deploy() {
   sleep 2
 
   local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template.yaml
+  if test "$ARG_EPHEMERAL" = true; then
+    template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-demo-template.yaml
+  fi
   echo "Using template $template"
   oc $ARG_OC_OPS new-app -f $template \
       -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX \
