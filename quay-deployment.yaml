@@ -109,7 +109,7 @@ objects:
 parameters:
 - name: DOCKER_CONFIG
   description: see access.redhat.com/solutions/3533201
-  displayName: Docker Configuration pulling quay and coreos images
+  displayName: Docker Configuration pulling quay and clair images
   required: true
 - description: HTTP Proxy URL
   displayName: HTTP Proxy URL
