@@ -712,8 +712,8 @@ objects:
             fi
 
             oc process -f https://raw.githubusercontent.com/faust64/docker-jenkins-agent-klar/master/openshift.yaml \
-            if test "${DEPLOY_CLAIR}" = true -a "${ENABLE_QUAY}" != true; then
                 "--param=HTTP_PROXY=$PROXY_URL" "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
+            if test "${DEPLOY_CLAIR}" = true -a "${ENABLE_QUAY}" != true; then
               if test "${EPHEMERAL}" = true; then
                 oc process -f https://raw.githubusercontent.com/faust64/openshift-coreos-clair/master/clair-ephemeral.yaml \
                   "--param=HTTP_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
