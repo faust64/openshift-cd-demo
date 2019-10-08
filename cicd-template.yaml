@@ -427,9 +427,7 @@ objects:
                   script {
                     openshift.withCluster() {
                       if (env.ENABLE_QUAY.toBoolean()) {
-                        withCredentials([usernamePassword(credentialsId: "${openshift.project()}-quay-cicd-secret", usernameVariable: "QUAY_USER", passwordVariable: "QUAY_PWD")]) {
-                          sh "skopeo copy docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --src-creds '$QUAY_USER:$QUAY_PWD' --dest-creds '$QUAY_USER:$QUAY_PWD' --src-tls-verify=false --dest-tls-verify=false"
-                        }
+                        sh "skopeo copy docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --src-creds '${QUAY_AUTHUSER}:${QUAY_PASSWORD}' --dest-creds '${QUAY_AUTHUSER}:${QUAY_PASSWORD}' --src-tls-verify=false --dest-tls-verify=false"
                       } else {
                         openshift.tag("${env.DEV_PROJECT}/tasks:latest", "${env.STAGE_PROJECT}/tasks:stage")
                       }
@@ -579,7 +577,6 @@ objects:
               if ! oc describe secret quay-cicd-secret >/dev/null 2>&1; then
                 oc create secret generic quay-cicd-secret --from-literal='username=${QUAY_AUTHUSER}' --from-literal='password=${QUAY_PASSWORD}' -n ${CICD_NAMESPACE}
               fi
-              oc label secret quay-cicd-secret credential.sync.jenkins.openshift.io=true -n ${CICD_NAMESPACE} --overwrite=true
 
               # dev
               if ! oc describe secret quay-cicd-secret -n ${DEV_PROJECT} >/dev/null 2>&1; then
