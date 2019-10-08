@@ -417,7 +417,9 @@ objects:
                   script {
                     openshift.withCluster() {
                       if (env.ENABLE_QUAY.toBoolean()) {
-                        sh "skopeo copy docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --src-creds '${QUAY_AUTHUSER}:${QUAY_PASSWORD}' --dest-creds '${QUAY_AUTHAUTHUSER}:${QUAY_PASSWORD}' --src-tls-verify=false --dest-tls-verify=false"
+                        def authUser = '${QUAY_AUTHUSER}'
+                        def authPass = '${QUAY_PASSWORD}'
+                        sh "skopeo copy docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest docker://${QUAY_HOSTNAME}/${QUAY_USERNAME}/${QUAY_REPOSITORY}:stage --src-creds '${authUser}:${authPass}' --dest-creds '${authUser}:${authPass}' --src-tls-verify=false --dest-tls-verify=false"
                       } else {
                         openshift.tag("${env.DEV_PROJECT}/tasks:latest", "${env.STAGE_PROJECT}/tasks:stage")
                       }
