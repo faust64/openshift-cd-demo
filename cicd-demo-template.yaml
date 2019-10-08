@@ -726,11 +726,11 @@ objects:
 
             if test "${EPHEMERAL}" = true; then
               oc process -f https://raw.githubusercontent.com/faust64/nexus/master/nexus3-template.yaml \
-                --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
+                --param=NEXUS_VERSION=3.13.0 "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             else
               oc process -f https://raw.githubusercontent.com/faust64/nexus/master/nexus3-persistent-template.yaml \
-                --param=NEXUS_VERSION=3.13.0 --param=MAX_MEMORY=4Gi "--param=HTTP_PROXY=$PROXY_URL" \
+                --param=NEXUS_VERSION=3.13.0 "--param=HTTP_PROXY=$PROXY_URL" \
                 "--param=HTTPS_PROXY=$PROXY_URL" "--param=NO_PROXY=$NO_PROXY" | oc create -f-
             fi
 
