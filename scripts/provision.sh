@@ -237,6 +237,14 @@ function deploy() {
       -p "PROXY_HOST=$PROXY_HOST" -p "PROXY_PORT=$PROXY_PORT" -p "PROXY_EXCLUDE_NAMES=$PROXY_EXCLUDE" \
       -p "QUAY_HOSTNAME=$ARG_QUAY_HOSTNAME" -p "QUAY_AUTHUSER=$ARG_QUAY_AUTHUSER" \
       -p "QUAY_USERNAME=$ARG_QUAY_USER" -p "QUAY_PASSWORD=$ARG_QUAY_PASS" -n cicd-$PRJ_SUFFIX
+  if test "$ENABLE_QUAY" = false -a "$QUAY_PASSWORD"; then
+    template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/sync2quay.yaml
+    oc process -f $template -p "QUAY_HOSTNAME=$ARG_QUAY_HOSTNAME" -p "QUAY_AUTHUSER=$ARG_QUAY_AUTHUSER" \
+      -p "QUAY_USERNAME=$ARG_QUAY_USER" -p "QUAY_PASSWORD=$ARG_QUAY_PASS" -n cicd-$PRJ_SUFFIX | oc apply -f-
+  elif test "$ENABLE_QUAY" = false -a "$DEPLOY_CLAIR" = true; then
+    template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/scan-template.yaml
+    oc process -f $template | oc apply -f-
+  fi
 }
 
 function make_idle() {
