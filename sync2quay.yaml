@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: Template
+labels:
+  group: cicd
+metadata:
+  annotations:
+    iconClass: icon-jenkins
+    tags: jenkins,pipeline,quay,clair,cicd
+  name: sync
+objects:
+# Pipeline
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    annotations:
+      pipeline.alpha.openshift.io/uses: '[{"name": "jenkins", "namespace": "", "kind": "DeploymentConfig"}]'
+    labels:
+      app: cicd-pipeline
+      name: cicd-pipeline
+    name: sync2quay-pipeline
+  spec:
+    runPolicy: Serial
+    strategy:
+      jenkinsPipelineStrategy:
+        jenkinsfile: |-
+          properties([
+                  parameters([
+                          string(defaultValue: '${SYNC_TAG}', description: 'Image Tag to Sync', name: 'imageTag'),
+                          string(defaultValue: 'docker-registry.default.svc:5000', description: 'Source Registry Host Address', name: 'dkrHostname'),
+                          string(defaultValue: 'dev', description: 'Source Registry Project', name: 'dkrProject'),
+                          string(defaultValue: 'tasks', description: 'Source Registry Image Name', name: 'dkrRepo'),
+                          string(defaultValue: '${QUAY_HOSTNAME}', description: 'Target Registry Host Address', name: 'quayHostname'),
+                          string(defaultValue: '${QUAY_AUTHUSER}', description: 'Target Registry Auth User', name: 'quayUser'),
+                          string(defaultValue: '${QUAY_PASSWORD}', description: 'Target Registry Auth Token', name: 'quayPass'),
+                          string(defaultValue: '${QUAY_REPOSITORY}', description: 'Image Address to Scan', name: 'quayRepo'),
+                          string(defaultValue: '${QUAY_USERNAME}', description: 'Target Registry Project', name: 'quayProject')
+                      ])
+              ])
+          podTemplate(label: "skopeo", name: "skopeo", cloud: 'openshift',
+                      containers: [
+                              containerTemplate(
+                                      name: 'jnlp',
+                                      image: "${SKOPEO_IMAGE}"
+                                  )
+                         ],
+                     inheritFrom: 'maven',
+                     serviceAccount: 'jenkins') {
+              node("skopeo") {
+                  stage('Push Image') {
+                      script {
+                      openshift.withCluster() {
+                              def token = sh (
+                                     script: "cat /var/run/secrets/kubernetes.io/serviceaccount/token",
+                                     returnStdout: true
+                                 )
+                              def dst = "${params.quayHostname}/${params.quayProject}/${params.quayRepo}:${params.imageTag}"
+                              def src = "${params.dkrHostname}/${params.dkrProject}/${params.dkrRepo}:${params.imageTag}"
+                              sh "skopeo copy docker://${src} docker://${dst} --src-creds 'dummy:${token}' --dest-creds '${params.quayUser}:${params.quayPass}' --src-tls-verify=false --dest-tls-verify=false || sleep 3600"
+                          }
+                      }
+                  }
+              }
+          }
+      type: JenkinsPipeline
+parameters:
+- name: QUAY_AUTHUSER
+  required: true
+  value: "$app"
+- name: QUAY_HOSTNAME
+  required: true
+  value: quay.io
+- description: Quay.io password to push the images to tasks-sample-app repository on your Quay.io account
+  displayName: Quay.io Password
+  name: QUAY_PASSWORD
+  required: true
+- description: Quay.io repository for pushing Tasks container images
+  displayName: Quay.io Image Repository
+  name: QUAY_REPOSITORY
+  required: true
+  value: tasks
+- description: Quay.io username to push the images to tasks-sample-app repository on your Quay.io account
+  displayName: Quay.io Username
+  name: QUAY_USERNAME
+  required: true
+  value: cicd
+- name: SKOPEO_IMAGE
+  value: docker.io/siamaksade/jenkins-slave-skopeo-centos7
+- name: SYNC_TAG
+  value: latest

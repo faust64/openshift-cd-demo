@@ -19,11 +19,13 @@ function usage() {
     echo "   delete                   Clean up and remove demo projects and objects"
     echo "   idle                     Make all demo services idle"
     echo "   unidle                   Make all demo services unidle"
-    echo 
+    echo
     echo "OPTIONS:"
-    echo "   --enable-quay              Optional    Enable integration of build and deployments with quay.io"
-    echo "   --quay-username            Optional    quay.io username to push the images to a quay.io account. Required if --enable-quay is set"
-    echo "   --quay-password            Optional    quay.io password to push the images to a quay.io account. Required if --enable-quay is set"
+    echo "   --enable-quay              Optional    Enable integration of build and deployments with Quay"
+    echo "   --quay-authuser            Optional    username authenticating against Quay registry."
+    echo "   --quay-backend             Optional    quay backend pushing images to a Quay registry. Defaults to quay.io."
+    echo "   --quay-username            Optional    quay username or organization pushing images to a Quay registry. Required if --enable-quay is set"
+    echo "   --quay-password            Optional    quay password or token pushing images to a Quay registry. Required if --enable-quay is set"
     echo "   --user [username]          Optional    The admin user for the demo projects. Required if logged in as system:admin"
     echo "   --project-suffix [suffix]  Optional    Suffix to be added to demo project names e.g. ci-SUFFIX. If empty, user will be used as suffix"
     echo "   --ephemeral                Optional    Deploy demo without persistent storage. Default false"
@@ -38,9 +40,19 @@ ARG_COMMAND=
 ARG_EPHEMERAL=false
 ARG_OC_OPS=
 ARG_DEPLOY_CHE=false
+ARG_DEPLOY_CLAIR=false
 ARG_ENABLE_QUAY=false
+ARG_QUAY_AUTHUSER=
+ARG_QUAY_HOSTNAME=quay.io
 ARG_QUAY_USER=
 ARG_QUAY_PASS=
+
+if test "$http_proxy" -a -z "$HTTP_PROXY"; then
+    HTTP_PROXY=$http_proxy
+fi
+if echo "$HTTP_PROXY" | grep http:// >/dev/null; then
+    eval `echo "$HTTP_PROXY" | sed -e 's|http://||' -e 's|/*$||' | awk -F: '{print "PROXY_HOST="$1" PROXY_PORT="$2}'`
+fi
 
 while :; do
     case $1 in
@@ -86,8 +98,37 @@ while :; do
                 exit 255
             fi
             ;;
+        --proxy-host)
+            PROXY_HOST=$2
+            ;;
+        --proxy-port)
+            PROXY_PORT=$2
+            ;;
+        --proxy-exclude)
+            PROXY_EXCLUDE=$2
+            ;;
         --enable-quay)
             ARG_ENABLE_QUAY=true
+            ;;
+        --quay-backend)
+            if [ -n "$2" ]; then
+                ARG_QUAY_HOSTNAME=$2
+                shift
+            else
+                printf 'ERROR: "--quay-backend" requires a non-empty value.\n' >&2
+                usage
+                exit 255
+            fi
+            ;;
+        --quay-authuser)
+            if [ -n "$2" ]; then
+                ARG_QUAY_AUTHUSER=$2
+                shift
+            else
+                printf 'ERROR: "--quay-authuser" requires a non-empty value.\n' >&2
+                usage
+                exit 255
+            fi
             ;;
         --quay-username)
             if [ -n "$2" ]; then
@@ -112,6 +153,9 @@ while :; do
         --ephemeral)
             ARG_EPHEMERAL=true
             ;;
+        --enable-clair|--deploy-clair)
+            ARG_DEPLOY_CLAIR=true
+            ;;
         --enable-che|--deploy-che)
             ARG_DEPLOY_CHE=true
             ;;
@@ -133,6 +177,14 @@ while :; do
 
     shift
 done
+if $ARG_ENABLE_QUAY; then
+    if test -z "$ARG_QUAY_AUTHUSER"; then
+	ARG_QUAY_AUTHUSER="$ARG_QUAY_USERNAME"
+    fi
+fi
+if test -z "$PROXY_HOST"; then
+    PROXY_PORT= PROXY_EXCLUDE=
+fi
 
 
 ################################################################################
@@ -142,7 +194,7 @@ done
 LOGGEDIN_USER=$(oc $ARG_OC_OPS whoami)
 OPENSHIFT_USER=${ARG_USERNAME:-$LOGGEDIN_USER}
 PRJ_SUFFIX=${ARG_PROJECT_SUFFIX:-`echo $OPENSHIFT_USER | sed -e 's/[-@].*//g'`}
-GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-siamaksade}
+GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-faust64}
 GITHUB_REF=${GITHUB_REF:-ocp-4.1}
 
 function deploy() {
@@ -159,7 +211,7 @@ function deploy() {
     oc $ARG_OC_OPS adm policy add-role-to-user admin $ARG_USERNAME -n dev-$PRJ_SUFFIX >/dev/null 2>&1
     oc $ARG_OC_OPS adm policy add-role-to-user admin $ARG_USERNAME -n stage-$PRJ_SUFFIX >/dev/null 2>&1
     oc $ARG_OC_OPS adm policy add-role-to-user admin $ARG_USERNAME -n cicd-$PRJ_SUFFIX >/dev/null 2>&1
-    
+
     oc $ARG_OC_OPS annotate --overwrite namespace dev-$PRJ_SUFFIX   demo=openshift-cd-$PRJ_SUFFIX >/dev/null 2>&1
     oc $ARG_OC_OPS annotate --overwrite namespace stage-$PRJ_SUFFIX demo=openshift-cd-$PRJ_SUFFIX >/dev/null 2>&1
     oc $ARG_OC_OPS annotate --overwrite namespace cicd-$PRJ_SUFFIX  demo=openshift-cd-$PRJ_SUFFIX >/dev/null 2>&1
@@ -174,8 +226,25 @@ function deploy() {
   sleep 2
 
   local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template.yaml
+  if test "$ARG_EPHEMERAL" = true; then
+    template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-demo-template.yaml
+  fi
   echo "Using template $template"
-  oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p DEPLOY_CHE=$ARG_DEPLOY_CHE -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_QUAY=$ARG_ENABLE_QUAY -p QUAY_USERNAME=$ARG_QUAY_USER -p QUAY_PASSWORD=$ARG_QUAY_PASS -n cicd-$PRJ_SUFFIX 
+  oc $ARG_OC_OPS new-app -f $template \
+      -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX \
+      -p DEPLOY_CLAIR=$ARG_DEPLOY_CLAIR -p DEPLOY_CHE=$ARG_DEPLOY_CHE \
+      -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_QUAY=$ARG_ENABLE_QUAY \
+      -p "PROXY_HOST=$PROXY_HOST" -p "PROXY_PORT=$PROXY_PORT" -p "PROXY_EXCLUDE_NAMES=$PROXY_EXCLUDE" \
+      -p "QUAY_HOSTNAME=$ARG_QUAY_HOSTNAME" -p "QUAY_AUTHUSER=$ARG_QUAY_AUTHUSER" \
+      -p "QUAY_USERNAME=$ARG_QUAY_USER" -p "QUAY_PASSWORD=$ARG_QUAY_PASS" -n cicd-$PRJ_SUFFIX
+  if test "$ENABLE_QUAY" = false -a "$QUAY_PASSWORD"; then
+    template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/sync2quay.yaml
+    oc process -f $template -p "QUAY_HOSTNAME=$ARG_QUAY_HOSTNAME" -p "QUAY_AUTHUSER=$ARG_QUAY_AUTHUSER" \
+      -p "QUAY_USERNAME=$ARG_QUAY_USER" -p "QUAY_PASSWORD=$ARG_QUAY_PASS" -n cicd-$PRJ_SUFFIX | oc apply -f-
+  elif test "$ENABLE_QUAY" = false -a "$DEPLOY_CLAIR" = true; then
+    template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/scan-template.yaml
+    oc process -f $template | oc apply -f-
+  fi
 }
 
 function make_idle() {
@@ -250,7 +319,7 @@ case "$ARG_COMMAND" in
         echo
         echo "Delete completed successfully!"
         ;;
-      
+
     idle)
         echo "Idling demo..."
         make_idle
@@ -271,7 +340,7 @@ case "$ARG_COMMAND" in
         echo
         echo "Provisioning completed successfully!"
         ;;
-        
+
     *)
         echo "Invalid command specified: '$ARG_COMMAND'"
         usage
@@ -283,3 +352,4 @@ popd >/dev/null
 
 END=`date +%s`
 echo "(Completed in $(( ($END - $START)/60 )) min $(( ($END - $START)%60 )) sec)"
+echo
