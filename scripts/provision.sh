@@ -31,6 +31,8 @@ function usage() {
     echo "   --ephemeral                Optional    Deploy demo without persistent storage. Default false"
     echo "   --enable-che               Optional    Deploy Eclipse Che as an online IDE for code changes. Default false"
     echo "   --oc-options               Optional    oc client options to pass to all oc commands e.g. --server https://my.openshift.com"
+    echo "   --jenkins-gc-options       Optional    Jenkins GC Options"
+    echo "   --jenkins-plugins          Optional    Jenkins plugins to install"
     echo
 }
 
@@ -38,10 +40,12 @@ ARG_USERNAME=
 ARG_PROJECT_SUFFIX=
 ARG_COMMAND=
 ARG_EPHEMERAL=false
-ARG_OC_OPS=
+ARG_JENKINS_GC="-XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ParallelRefProcEnabled -XX:+ExplicitGCInvokesConcurrent -XX:+UnlockDiagnosticVMOptions -XX:G1SummarizeRSetStatsPeriod=1 -XX:MaxMetaspaceExpansion=64M -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20"
+ARG_JENKINS_PLUGINS="sonar,gitlab-hook,generic-webhook-trigger,gogs-webhook,pipeline-npm,gitlab,nexus-artifact-uploader,kubernetes-credentials-provider,http_request,accelerated-build-now-plugin,active-directory,analysis-core,ant,antisamy-markup-formatter,artifactdeployer,build-failure-analyzer,build-name-setter,conditional-buildstep,configurationslicing,custom-tools-plugin,cvs,description-setter,disk-usage,docker-plugin,docker-slaves,durable-task,elastic-axis,email-ext,envinject,external-monitor-job,gerrit-trigger,git-parameter,groovy-label-assignment,PrioritySorter,postbuild-task,jobConfigHistory,leastload,mapdb-api,monitoring,mask-passwords,periodic-reincarnation,plot,preSCMbuildstep,project-stats-plugin,purge-build-queue-plugin,release,repo,slave-setup,slave-status,ssh-agent,throttle-concurrents,timestamper,translation,warnings"
 ARG_DEPLOY_CHE=false
 ARG_DEPLOY_CLAIR=false
 ARG_ENABLE_QUAY=false
+ARG_OC_OPS=
 ARG_QUAY_AUTHUSER=
 ARG_QUAY_HOSTNAME=quay.io
 ARG_QUAY_USER=
@@ -109,6 +113,26 @@ while :; do
             ;;
         --enable-quay)
             ARG_ENABLE_QUAY=true
+            ;;
+	--jenkins-gc-options)
+            if [ -n "$2" ]; then
+                ARG_JENKINS_GC="$2"
+                shift
+            else
+                printf 'ERROR: "--jenkins-gc-option" requires a non-empty value.\n' >&2
+                usage
+                exit 255
+            fi
+            ;;
+	--jenkins-plugins)
+            if [ -n "$2" ]; then
+                ARG_JENKINS_PLUGINS="$2"
+                shift
+            else
+                printf 'ERROR: "--jenkins-plugins" requires a non-empty value.\n' >&2
+                usage
+                exit 255
+            fi
             ;;
         --quay-backend)
             if [ -n "$2" ]; then
@@ -221,7 +245,12 @@ function deploy() {
 
   sleep 2
 
-  oc new-app jenkins-ephemeral -n cicd-$PRJ_SUFFIX
+  if test "$EPHEMERAL" = true; then
+    oc new-app jenkins-ephemeral -n cicd-$PRJ_SUFFIX
+  else
+    oc new-app jenkins-persistent -n cicd-$PRJ_SUFFIX
+  fi
+  oc set env dc/jenkins -n cicd-$PRJ_SUFFIX "INSTALL_PLUGINS=$ARG_JENKINS_PLUGINS" "JAVA_GC_OPTS=$ARG_JENKINS_GC"
 
   sleep 2
 

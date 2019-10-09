@@ -106,6 +106,8 @@ objects:
             value: jenkins-jnlp
           - name: JAVA_GC_OPTS
             value: -XX:+UseG1GC -XX:+UseStringDeduplication -XX:+ParallelRefProcEnabled -XX:+ExplicitGCInvokesConcurrent -XX:+UnlockDiagnosticVMOptions -XX:G1SummarizeRSetStatsPeriod=1 -XX:MaxMetaspaceExpansion=64M -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20
+          - name: ENABLE_FATAL_ERROR_LOG_FILE
+            value: ${ENABLE_FATAL_ERROR_LOG_FILE}
           image: ' '
           imagePullPolicy: IfNotPresent
           livenessProbe:
@@ -851,6 +853,10 @@ parameters:
 - description: Use no persistent storage for Gogs, Nexus, SonarQube and CoreOS Clair (demo)
   displayName: Ephemeral
   name: EPHEMERAL
+  value: "false"
+- description: When a fatal error occurs, an error log is created with information and the state obtained at the time of the fatal error.
+  displayName: Fatal Error Log File
+  name: ENABLE_FATAL_ERROR_LOG_FILE
   value: "false"
 - name: GOGS_WITH_PROXY
   value: "true"
