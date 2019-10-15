@@ -647,6 +647,7 @@ objects:
             fi
             if ! oc describe route tasks -n ${DEV_PROJECT} >/dev/null 2>&1; then
               oc expose svc/tasks -n ${DEV_PROJECT}
+              oc patch route tasks -n ${DEV_PROJECT} --patch '{"spec":{"tls":{"insecureEdgeTerminationPolicy":"Redirect","termination":"edge"}}}'
             fi
 
             # stage project
@@ -655,6 +656,7 @@ objects:
             fi
             if ! oc describe route tasks -n ${STAGE_PROJECT} >/dev/null 2>&1; then
               oc expose svc/tasks -n ${STAGE_PROJECT}
+              oc patch route tasks -n ${STAGE_PROJECT} --patch '{"spec":{"tls":{"insecureEdgeTerminationPolicy":"Redirect","termination":"edge"}}}'
             fi
 
             # deploy gogs
